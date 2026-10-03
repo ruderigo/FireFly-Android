@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A firefly: warm body, glowing tail. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#40F0A050" android:pathData="M54,68m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0" />
+    <path android:fillColor="#F0A050" android:pathData="M54,68m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0" />
+    <path android:fillColor="#ECDFC8" android:pathData="M54,36m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+    <path android:fillColor="#9C8D76" android:pathData="M45,40 L28,30 L30,27 L47,37 Z M63,40 L80,30 L78,27 L61,37 Z" />
+    <path android:fillColor="#D97A3A" android:pathData="M47,44 L61,44 L60,58 L48,58 Z" />
+</vector>
