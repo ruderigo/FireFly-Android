@@ -1,4 +1,4 @@
-# FireFly for Android
+# FireFly for Android [APK FILE](FireFly-Android-v0.1.2.apk)
 
 A LoRa-first Reticulum messenger for Android, built for the Stump network.
 It speaks standard **LXMF** (so it talks to Sideband, NomadNet, MeshChat and
