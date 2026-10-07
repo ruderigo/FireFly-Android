@@ -8,3 +8,6 @@ keystore.properties
 *.jks
 *.keystore
 .cxx/
+*.apk
+.cxx/
+*.apk
