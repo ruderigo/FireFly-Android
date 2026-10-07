@@ -82,20 +82,17 @@ jobs:
           cp "$APK" "$OUT"
           rm -f "$RUNNER_TEMP/firefly-release.jks"
           echo "path=$OUT" >> "$GITHUB_OUTPUT"
-cat >> docs/RELEASE.md <<'EOF'
 
-## Releases built by GitHub
+      - name: Keep the APK as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.path }}
+          path: ${{ steps.apk.outputs.path }}
 
-`.github/workflows/release.yml` builds the same signed APK on GitHub when you
-push a version tag, and publishes it as a GitHub Release named
-`FireFly-Android-<version>.apk` (the name a Stump node looks for in its
-`tools/` folder). Give GitHub your key once, as repository secrets:
-
-    base64 -i ~/firefly-release.jks | gh secret set FIREFLY_KEYSTORE_BASE64
-    gh secret set FIREFLY_KEYSTORE_PASSWORD
-    gh secret set FIREFLY_KEY_ALIAS --body firefly
-    gh secret set FIREFLY_KEY_PASSWORD
-
-For each release, bump versionName and versionCode in app/build.gradle.kts,
-commit, then `git tag v<version>` and `git push origin v<version>`.
-The tag must match versionName, or the build stops before doing anything.
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ steps.apk.outputs.path }}
+          draft: false
+          prerelease: false
