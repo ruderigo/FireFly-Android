@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- USB chips found on RNode boards. -->
+<resources>
+    <!-- Silicon Labs CP210x (Heltec V3, T-Beam) -->
+    <usb-device vendor-id="4292" product-id="60000" />
+    <!-- WCH CH34x -->
+    <usb-device vendor-id="6790" />
+    <!-- Espressif ESP32-S3 native USB -->
+    <usb-device vendor-id="12346" product-id="4097" />
+    <!-- Adafruit / RAK nRF52 -->
+    <usb-device vendor-id="9114" />
+    <!-- Nordic nRF52 -->
+    <usb-device vendor-id="6421" />
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" />
+</resources>

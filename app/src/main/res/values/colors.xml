@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stump "Amber" theme, CLIENT_QUICKSTART.md -->
+    <color name="background">#1B1512</color>
+    <color name="sidebar">#221B15</color>
+    <color name="ember">#D97A3A</color>
+</resources>
