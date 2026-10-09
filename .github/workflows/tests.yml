@@ -18,7 +18,7 @@ jobs:
   engine:
     name: Engine tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     env:
       PYTHONUNBUFFERED: "1"
     steps:
@@ -61,8 +61,11 @@ jobs:
         timeout-minutes: 6
         run: python engine-tests/run_air.py
 
+      # Usually ~2.5 min, but its cost-16 stamps are proof-of-work on one core
+      # (no multiprocessing, as on Android), so a slow runner can take far longer;
+      # the test's own waits allow up to ~17 min before it fails on its own.
       - name: Messages left at a propagation node
-        timeout-minutes: 6
+        timeout-minutes: 18
         run: python engine-tests/run_propagation.py
 
   build:
