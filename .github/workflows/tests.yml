@@ -1,0 +1,89 @@
+name: Tests
+
+# Every push to main and every pull request: the Python engine tests (engine-tests/),
+# then a debug APK build so a change that breaks Kotlin, CMake or Chaquopy is caught
+# before a release tag. Releases are still built by release.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Engine tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same Python as Chaquopy embeds in the app (chaquopy.defaultConfig.version).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # Same pins as the APK (chaquopy pip block in app/build.gradle.kts).
+      - name: Install the engine's dependencies
+        run: pip install rns==1.5.5 lxmf==1.2.0 pyserial
+
+      - name: Stamps (LXMF proof-of-work, Android path)
+        timeout-minutes: 2
+        run: python engine-tests/run_stamps.py
+
+      - name: Billboard and file shelf over Wi-Fi
+        timeout-minutes: 2
+        run: python engine-tests/run_web.py
+
+      - name: Stump chat over mesh and Wi-Fi
+        timeout-minutes: 4
+        run: python engine-tests/run_stump.py
+
+      - name: Stump node without Opus
+        timeout-minutes: 2
+        run: python engine-tests/run_stump_legacy.py
+
+      - name: Radio against simulated USB and BLE RNodes
+        timeout-minutes: 3
+        run: python engine-tests/run_radio.py
+
+      - name: AutoInterface without if_nametoindex
+        timeout-minutes: 2
+        run: python engine-tests/run_autointerface.py
+
+      - name: Two engines over a simulated LoRa channel
+        timeout-minutes: 6
+        run: python engine-tests/run_air.py
+
+      - name: Messages left at a propagation node
+        timeout-minutes: 6
+        run: python engine-tests/run_propagation.py
+
+  build:
+    name: Debug APK builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Python 3.13 (Chaquopy builds with it)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build the debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace

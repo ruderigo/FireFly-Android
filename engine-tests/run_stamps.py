@@ -45,3 +45,4 @@ th.start(); time.sleep(0.5); LXStamper.cancel_work(mid); th.join(5)
 check(not th.is_alive() and res["r"][0] is None and mid not in LXStamper.active_jobs,
       "cancel_work() stops it within a moment and returns no stamp")
 print("ALL PASSED" if ok else "SOME FAILED")
+sys.stdout.flush(); os._exit(0 if ok else 1)
