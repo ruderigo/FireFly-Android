@@ -33,6 +33,10 @@ jobs:
       - name: Install the engine's dependencies
         run: pip install rns==1.5.5 lxmf==1.2.0 pyserial
 
+      - name: Final message states can't be overwritten
+        timeout-minutes: 2
+        run: python engine-tests/run_outbound_race.py
+
       - name: Stamps (LXMF proof-of-work, Android path)
         timeout-minutes: 2
         run: python engine-tests/run_stamps.py
