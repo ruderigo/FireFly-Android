@@ -599,9 +599,9 @@ class Core:
 
     def _on_delivered(self, msg_id, lxm):
         state = "stored" if lxm.method == LXMessage.PROPAGATED else "delivered"
-        self.store.update_message(msg_id, state=state, method=_method_name(lxm.method))
-        with self.lock:
+        with self.lock:                         # out of outbound first: see _monitor_outbound
             self.outbound.pop(msg_id, None)
+            self.store.update_message(msg_id, state=state, method=_method_name(lxm.method))
 
     def _on_failed(self, msg_id, lxm, peer_hex, text, title, allow_propagation, audio=None):
         with self.lock:
@@ -630,9 +630,19 @@ class Core:
         for msg_id, lxm in items:
             st = names.get(lxm.state)
             if st:
-                row = self.store.message(msg_id)
-                if row and row["state"] != st:
-                    self.store.update_message(msg_id, state=st)
+                # Under the lock, and only while the message is still outbound:
+                # _on_delivered/_on_failed take it out of self.outbound under the
+                # same lock before writing the final state. Without this, a pass
+                # that read the list just before delivery could overwrite
+                # "stored" with "sent" (LXMF leaves a propagated message in SENT
+                # when it calls the delivery callback), and nothing would ever
+                # correct it.
+                with self.lock:
+                    if self.outbound.get(msg_id) is not lxm:
+                        continue
+                    row = self.store.message(msg_id)
+                    if row and row["state"] != st:
+                        self.store.update_message(msg_id, state=st)
 
     # ================================================================ receiving
     def _on_message(self, lxm):

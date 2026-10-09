@@ -8,11 +8,11 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.4.1: local-network discovery fixed.** Phase 1 complete. Built and field-tested: BLE and USB
+Status: **0.4.1: local-network discovery and stuck message states fixed.** Phase 1 complete. Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
 
-### 0.4.1: local-network discovery fixed
+### 0.4.1: local-network discovery and stuck message states fixed
 - **Wi-Fi peers are found again.** "Local network" (Reticulum's AutoInterface)
   failed on any network with IPv6, which is nearly every Wi-Fi: Android's
   Python has no `socket.if_nametoindex`, and the fallback asked Reticulum's
@@ -20,6 +20,13 @@ Opus voice notes everywhere, and delivery with the screen locked.
   ("required argument is not an integer"). FireFly now asks the C library
   directly, then `/sys/class/net`. Found by the new CI;
   `engine-tests/run_autointerface.py` now checks the lookup on every interface.
+- **Messages no longer get stuck at "sent" or "sending".** A message left at a
+  propagation node could show "sent" forever although the node had it (and
+  the friend received it), and a direct message could stay at "sending" the
+  same way: the outbound monitor could write over the final state if it had
+  listed the message just before delivery. It now only writes while the
+  message is still in flight. Seen about once in 16 runs of
+  `run_propagation.py`; `run_outbound_race.py` forces the timing.
 - Engine tests and a debug build run on every push and pull request.
 
 ### 0.4.0: Board and Files, over a Stump's Wi-Fi
