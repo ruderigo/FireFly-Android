@@ -8,9 +8,19 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.4.0: a Stump's billboard and file shelf, and a release build.** Phase 1 complete. Built and field-tested: BLE and USB
+Status: **0.4.1: local-network discovery fixed.** Phase 1 complete. Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked.
+
+### 0.4.1: local-network discovery fixed
+- **Wi-Fi peers are found again.** "Local network" (Reticulum's AutoInterface)
+  failed on any network with IPv6, which is nearly every Wi-Fi: Android's
+  Python has no `socket.if_nametoindex`, and the fallback asked Reticulum's
+  netinfo, which on Android needs that same function and returned nothing
+  ("required argument is not an integer"). FireFly now asks the C library
+  directly, then `/sys/class/net`. Found by the new CI;
+  `engine-tests/run_autointerface.py` now checks the lookup on every interface.
+- Engine tests and a debug build run on every push and pull request.
 
 ### 0.4.0: Board and Files, over a Stump's Wi-Fi
 - **Board tab** on a Stump joined over Wi-Fi: the node's billboard from
