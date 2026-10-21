@@ -35,69 +35,60 @@ jobs:
 
       - name: Final message states can't be overwritten
         timeout-minutes: 2
-        run: python engine-tests/run_outbound_race.py
+        run: bash engine-tests/ci_run.sh run_outbound_race.py
 
       - name: Stamps (LXMF proof-of-work, Android path)
         timeout-minutes: 2
-        run: python engine-tests/run_stamps.py
+        run: bash engine-tests/ci_run.sh run_stamps.py
 
       - name: Billboard and file shelf over Wi-Fi
         timeout-minutes: 2
-        run: python engine-tests/run_web.py
+        run: bash engine-tests/ci_run.sh run_web.py
 
       - name: Stump chat over mesh and Wi-Fi
         timeout-minutes: 4
-        run: python engine-tests/run_stump.py
+        run: bash engine-tests/ci_run.sh run_stump.py
 
       - name: Stump chat with a node from before Stump 1.0.0-beta.4
         timeout-minutes: 4
         env:
           FAKE_STUMP_OLD: "1"
-        run: python engine-tests/run_stump.py
+        run: bash engine-tests/ci_run.sh run_stump.py
 
       - name: The greeting (/hello), and /auth + /nick on older Stumps
         timeout-minutes: 3
-        run: |
-          python engine-tests/run_hello.py
-          python engine-tests/run_greeting.py
-          python engine-tests/run_auto_auth.py
+        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py
 
       - name: Hybrid access, private messages over LoRa and Wi-Fi, a steady list
         timeout-minutes: 3
-        run: |
-          python engine-tests/run_hybrid.py
-          python engine-tests/run_dm_sides.py
-          python engine-tests/run_order.py
+        run: bash engine-tests/ci_run.sh run_hybrid.py run_dm_sides.py run_order.py
 
       - name: A Stump that moved, a phone with no radio, home Wi-Fi
         timeout-minutes: 4
-        run: |
-          python engine-tests/run_relocate.py
-          python engine-tests/run_reach.py
-          python engine-tests/run_gateway.py
+        run: bash engine-tests/ci_run.sh run_relocate.py run_reach.py run_gateway.py
 
       - name: Stump node without Opus
         timeout-minutes: 2
-        run: python engine-tests/run_stump_legacy.py
+        run: bash engine-tests/ci_run.sh run_stump_legacy.py
 
       - name: Radio against simulated USB and BLE RNodes
         timeout-minutes: 3
-        run: python engine-tests/run_radio.py
+        run: bash engine-tests/ci_run.sh run_radio.py
 
       - name: AutoInterface without if_nametoindex
         timeout-minutes: 2
-        run: python engine-tests/run_autointerface.py
+        run: bash engine-tests/ci_run.sh run_autointerface.py
 
       - name: Two engines over a simulated LoRa channel
         timeout-minutes: 6
-        run: python engine-tests/run_air.py
+        run: bash engine-tests/ci_run.sh run_air.py
 
       # Usually ~2.5 min, but its cost-16 stamps are proof-of-work on one core
       # (no multiprocessing, as on Android), so a slow runner can take far longer;
       # the test's own waits allow up to ~17 min before it fails on its own.
       - name: Messages left at a propagation node
         timeout-minutes: 18
-        run: python engine-tests/run_propagation.py
+        run: bash engine-tests/ci_run.sh run_propagation.py
 
   build:
     name: Debug APK builds
