@@ -9,5 +9,3 @@ keystore.properties
 *.keystore
 .cxx/
 *.apk
-.cxx/
-*.apk

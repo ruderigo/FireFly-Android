@@ -41,7 +41,24 @@ class BeaconHandler:
     def received_announce(self, destination_hash, announced_identity, app_data):
         info = parse_beacon(app_data)
         if info:
-            self.on_stump(*info)
+            self.on_stump(*info, beacon_http(app_data))
+
+
+# Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
+# land there) and the chain's room is #wifi-mesh. A node still answers to the old
+# names, but replies with the new ones; an older node still calls it #lxmf. FireFly
+# keeps whatever name the node uses and only treats these as the same room.
+ROOM_ALIASES = {"lxmf": "lora-mesh", "lora": "lora-mesh", "chained": "wifi-mesh", "mesh": "wifi-mesh"}
+MESH_LANDING = ("lora-mesh", "lxmf", "lora")
+
+
+def canonical_room(room):
+    room = (room or "").strip().lstrip("#").lower()
+    return ROOM_ALIASES.get(room, room)
+
+
+def same_room(a, b):
+    return canonical_room(a) == canonical_room(b)
 
 
 def parse_beacon(app_data):
@@ -58,6 +75,17 @@ def parse_beacon(app_data):
         return None
 
 
+def beacon_http(app_data):
+    """The beacon's fifth item since Stump 1.0.0-beta.21: the web addresses it serves
+    on, the same list as its STUMP? answer's "http". [] on older Stumps."""
+    try:
+        data = msgpack.unpackb(app_data)
+        extra = data[4] if isinstance(data, list) and len(data) > 4 else None
+        return [u for u in extra if isinstance(u, str) and u.startswith("http")][:6] if isinstance(extra, list) else []
+    except Exception:
+        return []
+
+
 def beacon_hash_for(identity):
     """Destination hash of a peer's Stump beacon. request_path() on it to ask 'are you a Stump?'."""
     return RNS.Destination.hash(identity, BEACON_APP, BEACON_ASPECT)
@@ -66,7 +94,19 @@ def beacon_hash_for(identity):
 # ---------------------------------------------------------------- line protocol
 _DM = re.compile(r"^\[DM\] <([^>]+)>: (.*)$", re.S)
 _ROOM_MSG = re.compile(r"^<([^>]+)> (.*)$", re.S)
-_ROOM_LIST = re.compile(r"^#(\S+) ·(\d+)\s*(\[(minted|hybrid)\])?\s*(.*)$")
+# "#main ·3 topic", "#vip ·1 [minted] topic"; a Stump on a computer with its own Heltec may
+# mark #lora-mesh "[LoRa]" (only LoRa people and whom its owner invites). Any [word] is a tier.
+_ROOM_LIST = re.compile(r"^#(\S+) ·(\d+)\s*(\[([A-Za-z-]+)\])?\s*(.*)$")
+
+
+# Stump 1.0.0-beta.21, hybrid mode: anyone reads every room and writes in #main; a line
+# elsewhere (or a private message) before /auth gets this, in the visitor's language
+# (stumpid's "auth_required_generic"). It's sentence text, not a token: matched whole.
+AUTH_REQUIRED = (
+    "auth required for that -- send /auth to verify your identity",
+    "identité vérifiée requise — envoie /auth pour te vérifier",
+    "se requiere identidad verificada — envía /auth para verificarte",
+)
 
 
 def parse_line(line):
@@ -99,17 +139,22 @@ def parse_line(line):
         parts = line[3:].split()
         return {"kind": "tier_refused", "room": parts[0] if parts else "",
                 "tier": parts[1] if len(parts) > 1 else "", "text": line}
+    if line.strip() in AUTH_REQUIRED:
+        return {"kind": "needs_auth", "text": line}  # this needs a verified identity: /auth
     if line.startswith("⧗"):
-        return {"kind": "slow", "text": line}           # too many voice notes too fast
+        return {"kind": "slow", "text": line}           # slow down: voice notes, or plugin commands
     if line.startswith("⊖ "):
         return {"kind": "no_such_nick", "nick": line[2:].strip()}
     if line.startswith("* "):
         nick, _, text = line[2:].partition(" ")
         return {"kind": "action", "nick": nick, "text": text}
+    lora_locked = line.rstrip().endswith("[LoRa]")             # rrc.py appends it after the topic
+    if lora_locked:
+        line = line.rstrip()[:-len("[LoRa]")].rstrip()
     m = _ROOM_LIST.match(line)
     if m:
         return {"kind": "room", "room": m.group(1), "count": int(m.group(2)),
-                "tier": m.group(4) or "open", "topic": m.group(5)}
+                "tier": m.group(4) or ("LoRa" if lora_locked else "open"), "topic": m.group(5)}
     if line.startswith("#") and ": " in line:
         room, _, names = line.partition(": ")
         return {"kind": "names", "room": room[1:], "names": [n.strip() for n in names.split(",") if n.strip()]}

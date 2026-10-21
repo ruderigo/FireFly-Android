@@ -41,6 +41,8 @@ DEFAULTS = {
     "fallback_to_propagation": True,
     "sync_interval_min": 30,         # 0 = manual only (plus syncs when the radio comes up / app opens)
     "stump_wifi_default": "http://192.168.4.1",
+    "stump_ssids": [],               # hotspots joined as Stumps from Find Stumps (marked "Stump" in scans)
+    "stump_prefer": "wifi",          # Stumps: private messages over "wifi" while on its Wi-Fi, or "lora" (/hello)
     "voice_mode": 16,                # Opus (natural voice) everywhere; 0 = Automatic; 3-9 = a Codec 2 mode
     "log_level": 3,
     "settings_version": 4,
@@ -136,6 +138,8 @@ class Settings:
         self.data["sync_interval_min"] = max(0, int(self.data["sync_interval_min"]))
         if self.data["propagation_mode"] not in ("auto", "manual", "off"):
             self.data["propagation_mode"] = "auto"
+        if self.data.get("stump_prefer") not in ("wifi", "lora"):
+            self.data["stump_prefer"] = "wifi"
         if self.data.get("voice_mode") not in VOICE_MODES:
             self.data["voice_mode"] = 16
         name = str(self.data.get("display_name") or "").strip()

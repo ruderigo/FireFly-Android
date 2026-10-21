@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import androidx.compose.ui.platform.LocalContext
 import android.Manifest
 import android.content.Intent
 import android.os.Build
@@ -33,6 +34,7 @@ sealed interface Route {
     data class Dm(val key: String, val nick: String) : Route
     data object Pair : Route
     data object Propagation : Route
+    data object FindStumps : Route
 }
 
 class MainActivity : ComponentActivity() {
@@ -120,11 +122,14 @@ fun App() {
                 is Route.Dm -> DmScreen(r.key, r.nick, back)
                 Route.Pair -> PairScreen(back)
                 Route.Propagation -> PropagationScreen(back)
+                Route.FindStumps -> FindStumpsScreen(back, go)
             }
             else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("firefly", style = MaterialTheme.typography.headlineSmall.copy(color = Amber.Ember))
-                Text(stringResource(R.string.starting), style = MaterialTheme.typography.labelMedium)
+                Text(versionLabel(LocalContext.current), style = MaterialTheme.typography.labelSmall.copy(color = Amber.Dim))
+                Text(stringResource(R.string.starting), style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp))
             }
         }
     }

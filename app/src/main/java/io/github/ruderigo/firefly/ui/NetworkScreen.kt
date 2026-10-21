@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import kotlinx.coroutines.delay
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.foundation.background
@@ -30,6 +31,15 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
     val r = status.optJSONObject("radio") ?: JSONObject()
     val state = r.optString("state", "off")
     val paired = settings.optJSONObject("radio")?.optJSONArray("ble_devices")?.objects() ?: emptyList()
+    // Busy: a Search now or a Use being carried out, or an RNode being connected. The buttons
+    // wait meanwhile. A press counts as busy at once, until the engine's status says so itself.
+    var pressedAt by remember { mutableStateOf(0L) }
+    var pressed by remember { mutableStateOf<String?>(null) }        // "search", or the address used
+    var recheck by remember { mutableStateOf(0) }
+    LaunchedEffect(pressedAt) { if (pressedAt > 0) { delay(2600); recheck++ } }      // look again once the grace is over
+    val trying = r.optBoolean("busy") || state == "connecting" ||
+        (recheck >= 0 && System.currentTimeMillis() - pressedAt < 2500)
+    LaunchedEffect(trying) { if (!trying) pressed = null }
     var usbWaiting by remember { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(status) {
         usbWaiting = try { Engine.links.usbNeedingPermission().map { RadioLinks.label(it) } } catch (_: Exception) { emptyList() }
@@ -52,6 +62,10 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                     Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
                 }
                 Spacer(Modifier.height(8.dp))
+                // Which RNode: "RNode EA69" (its Bluetooth name), the USB device, or a Wi-Fi host.
+                r.optString("device").takeIf { it.isNotBlank() && it != "null" && state in listOf("online", "connecting") }?.let {
+                    KeyValue(stringResource(R.string.rnode), it)
+                }
                 if (state == "online") {
                     KeyValue(stringResource(R.string.link), when (r.optString("kind")) {
                         "ble" -> "Bluetooth LE"; "usb" -> "USB"; else -> "Wi-Fi" })
@@ -65,7 +79,11 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                     KeyValue(stringResource(R.string.traffic), "↓ %s  ↑ %s".format(bytes(r.optLong("rx")), bytes(r.optLong("tx"))))
                 }
                 Row(Modifier.padding(top = 10.dp)) {
-                    Button(stringResource(R.string.search_now)) { Engine.searchRadio() }
+                    Button(stringResource(if (trying && pressed == "search") R.string.searching_now else R.string.search_now),
+                        enabled = !trying) {
+                        pressed = "search"; pressedAt = System.currentTimeMillis()
+                        Engine.searchRadio()
+                    }
                     Spacer(Modifier.width(8.dp))
                     Button(stringResource(R.string.pair_ble), primary = false) { go(Route.Pair) }
                 }
@@ -88,11 +106,27 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                             Text(d.optString("name"), style = MaterialTheme.typography.bodyLarge)
                             Text(d.optString("address"), style = MaterialTheme.typography.labelSmall)
                         }
+                        // The one in use says so; any other can be switched to.
+                        val inUse = state == "online" && r.optString("port").equals("ble:" + d.optString("address"), ignoreCase = true)
+                        if (inUse) {
+                            Text(stringResource(R.string.in_use), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
+                        } else {
+                            val addr = d.optString("address")
+                            val connectingThis = trying && (pressed.equals(addr, ignoreCase = true) ||
+                                (state == "connecting" && r.optString("port").equals("ble:$addr", ignoreCase = true)))
+                            Button(stringResource(if (connectingThis) R.string.connecting_rnode else R.string.use_rnode),
+                                enabled = !trying) {
+                                pressed = addr; pressedAt = System.currentTimeMillis()
+                                Engine.fire("use_ble_device", addr)
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
                         Button(stringResource(R.string.forget), primary = false) { Engine.fire("remove_ble_device", d.optString("address")) }
                     }
                 }
             }
         }
+        item { StumpOverWifi(go) }         // a Stump by its address (moved here from the Stumps tab)
         item {
             Section(stringResource(R.string.you_on_network)) {
                 val addr = status.optString("address")
@@ -131,7 +165,8 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
 }
 
 private fun bytes(n: Long) = when {
-    n < 1024 -> "$n B"; n < 1024 * 1024 -> "%.1f KB".format(n / 1024.0); else -> "%.1f MB".format(n / 1048576.0)
+    n < 1024 -> "$n B"; n < 1024 * 1024 -> "%.1f KB".format(n / 1024.0)
+    n < 1024L * 1024 * 1024 -> "%.1f MB".format(n / 1048576.0); else -> "%.2f GB".format(n / 1073741824.0)
 }
 
 /** Find an RNode advertising over Bluetooth LE and pair with it. */

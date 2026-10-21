@@ -76,6 +76,10 @@ class Core:
         self.outbound = {}          # message id -> LXMessage in flight
         self.stumps = {}            # lxmf hash hex -> (name, version)
         self.sessions = {}          # session key -> StumpSession
+        self.moved = {}             # an old Wi-Fi key -> the key of the same Stump at its new address
+        self.beacon_http = {}       # lxmf hex -> the web addresses its beacon gave (Stump 1.0.0-beta.21+)
+        self._relocate_lock = threading.Lock()
+        self._relocate_tried = {}   # key -> when we last asked where it went
         self.extra_ifaces = []      # AutoInterface / TCP interfaces we attached
         self._introduced = set()    # peers we've sent to this session (announced to first)
         self.blocked = set()        # LXMF addresses whose announces and messages are ignored
@@ -297,8 +301,10 @@ class Core:
 
     _beacon_asked = set()
 
-    def _on_stump_beacon(self, lxmf_hex, name, version):
+    def _on_stump_beacon(self, lxmf_hex, name, version, http=None):
         first = lxmf_hex not in self.stumps
+        if http:
+            self.beacon_http[lxmf_hex] = list(http)
         self.stumps[lxmf_hex] = (name, version)
         if first:
             threading.Thread(target=self._ask_stump_pn, args=(lxmf_hex,), daemon=True).start()
@@ -685,17 +691,152 @@ class Core:
                 self.sessions[key] = sess
             return sess
 
-    def open_stump_wifi(self, base):
+    def open_stump_wifi(self, base, carry=None):
         key = wifi_key(base)
         with self.lock:
             sess = self.sessions.get(key)
             if sess is None:
+                # A saved entry keeps its name ("macOS"); the address is only a placeholder
+                # for a Stump not heard yet (its first poll gives its name).
+                saved = (self.store.stump_node(key) or {}).get("name")
                 sess = StumpSession(self, WifiPipe(normalize_base(base), self.http),
-                                    name=f"Stump Wi-Fi ({normalize_base(base).split('://')[-1]})")
+                                    name=saved or f"Stump Wi-Fi ({normalize_base(base).split('://')[-1]})", carry=carry)
                 self.sessions[key] = sess
             return sess
 
+    def retire_old_wifi(self, lxmf, keep):
+        """Other Wi-Fi entries of the Stump with this LXMF address are its old addresses:
+        their history moves to `keep`, and they go."""
+        keep_addr = keep.partition(":")[2]
+        for n in self.store.stump_nodes():
+            if n["transport"] == "wifi" and n["key"] != keep and (n.get("lxmf") or "") == lxmf:
+                self.close_stump(n["key"])
+                self.store.rekey_stump(n["key"], keep, keep_addr)
+                self.moved[n["key"]] = keep
+
+    def move_wifi(self, old_key, new_base, note=None):
+        """The Stump at `old_key` now answers at `new_base`: same entry, same history,
+        new address. -> the new session."""
+        new_base = normalize_base(new_base)
+        new_key = wifi_key(new_base)
+        if new_key == old_key:
+            return self.session(old_key)
+        old = self.sessions.get(old_key)
+        carry = {"seen": set(old.seen_remote), "since": getattr(old.pipe, "since", 0)} if old else None
+        self.close_stump(old_key)
+        self.store.rekey_stump(old_key, new_key, new_base)
+        self.moved[old_key] = new_key
+        self.moved.pop(new_key, None)
+        sess = self.open_stump_wifi(new_base, carry=carry)
+        if note:
+            self.store.add_line(new_key, sess.room, "reply", note)
+        self.log(f"Stump moved: {old_key} -> {new_key}")
+        return sess
+
+    RELOCATE_EVERY_S = 15
+
+    def relocate(self, key):
+        """A Wi-Fi Stump stopped answering: ask the Wi-Fi where the Stump with its
+        identity is now (STUMP?, then its beacon's addresses), and follow it.
+        -> the session at its new address, or None (not found, or same address)."""
+        with self._relocate_lock:
+            if key in self.moved:
+                return self.sessions.get(self.resolve(key))
+            node = self.store.stump_node(key)
+            lxmf = (node or {}).get("lxmf")
+            if not node or node["transport"] != "wifi" or not lxmf:
+                return None
+            now = time.time()
+            if now - self._relocate_tried.get(key, 0) < self.RELOCATE_EVERY_S:
+                return None
+            self._relocate_tried[key] = now
+            from . import discovery
+            card = discovery.locate(self.http, lxmf, self.beacon_http.get(lxmf, ()))
+            if not card or not card["base"] or wifi_key(card["base"]) == key:
+                return None
+            name = node.get("name") or card.get("name") or "the Stump"
+            return self.move_wifi(key, card["base"], note=f"found {name} at its new address ({card['base']})")
+
+    def refresh_wifi(self, cards=None):
+        """Stumps we know that answer on this Wi-Fi: open them there (a Wi-Fi entry for
+        one we only knew over LoRa), or follow them to their new address. -> keys."""
+        from . import discovery
+        cards = discovery.ask(self.http) if cards is None else cards
+        rows = self.store.stump_nodes()
+        out = []
+        for c in cards:
+            lx = c.get("lxmf")
+            if not lx or not c.get("base"):
+                continue
+            wifi = [n for n in rows if n["transport"] == "wifi" and (n.get("lxmf") or "") == lx]
+            here = wifi_key(c["base"])
+            if any(n["key"] == here for n in wifi):
+                self.session(here)
+                out.append(here)
+            elif wifi:
+                out.append(self.move_wifi(wifi[0]["key"], c["base"],
+                                          note=f"found {wifi[0].get('name') or c.get('name') or 'the Stump'} at its new address ({c['base']})").key)
+            elif any(n["transport"] == "mesh" and n["address"] == lx for n in rows):
+                sess = self.open_stump_wifi(c["base"])
+                self.store.upsert_stump_node(sess.key, "wifi", sess.pipe.address, lxmf=lx,
+                                             name=c.get("name") or None)
+                out.append(sess.key)
+        return out
+
+    def find_wifi(self, lxmf):
+        """The Wi-Fi entry of the Stump with this identity, found now if need be. -> key or None."""
+        from . import discovery
+        card = discovery.locate(self.http, lxmf, self.beacon_http.get(lxmf, ()))
+        if not card or not card["base"]:
+            return None
+        keys = self.refresh_wifi([card])
+        return keys[0] if keys else None
+
+    def radio_online(self):
+        try:
+            return bool(self.radio) and self.radio.snapshot().get("state") == "online"
+        except Exception:
+            return False
+
+    def can_reach(self, peer_hex):
+        """Something can carry a message there: the radio, or a known path (Wi-Fi, TCP)."""
+        if self.radio_online():
+            return True
+        try:
+            return RNS.Transport.has_path(bytes.fromhex(peer_hex))
+        except Exception:
+            return False
+
+    def stump_id(self, key):
+        """Who a Stump is, whichever entry: its LXMF address, else the entry's key."""
+        node = self.store.stump_node(key) or {}
+        return (node.get("address") if node.get("transport") == "mesh" else node.get("lxmf")) or key
+
+    def stump_blocks(self, key, nick):
+        return str(nick or "").lstrip("~").lower() in self.store.stump_blocked(self.stump_id(key))
+
+    def same_stump(self, key):
+        """Every entry of the Stump behind `key`: its LoRa entry and its Wi-Fi entries share
+        its LXMF address. -> [key, ...], `key` first."""
+        node = self.store.stump_node(key) or {}
+        lx = node.get("address") if node.get("transport") == "mesh" else node.get("lxmf")
+        keys = [key]
+        if lx:
+            for n in self.store.stump_nodes():
+                if n["key"] != key and (n["key"] == "mesh:" + lx or (n["transport"] == "wifi" and (n.get("lxmf") or "") == lx)):
+                    keys.append(n["key"])
+        return keys
+
+    def resolve(self, key):
+        """A Wi-Fi key that moved to a new address -> the key it has now."""
+        seen = set()
+        while key in self.moved and key not in seen:
+            seen.add(key)
+            key = self.moved[key]
+        return key
+
     def session(self, key):
+        key = self.resolve(key)
         if key in self.sessions:
             return self.sessions[key]
         kind, _, address = key.partition(":")

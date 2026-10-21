@@ -1,5 +1,6 @@
 package io.github.ruderigo.firefly.ui
 
+import io.github.ruderigo.firefly.net.WifiHttp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,22 +66,43 @@ fun TopBar(title: String, subtitle: String? = null, onBack: (() -> Unit)? = null
 /** The radio at a glance: the reason this app exists is LoRa. */
 @Composable
 fun RadioIndicator(status: JSONObject, onClick: () -> Unit) {
-    val r = status.optJSONObject("radio") ?: JSONObject()
-    val state = r.optString("state", "off")
-    val (color, label) = when (state) {
-        "online" -> Amber.Ember to when (r.optString("kind")) {
-            "ble" -> stringResource(R.string.radio_ble); "usb" -> stringResource(R.string.radio_usb)
-            else -> stringResource(R.string.radio_wifi) }
-        "connecting" -> Amber.Muted to stringResource(R.string.radio_connecting)
-        "refused" -> Amber.Error to stringResource(R.string.radio_refused)
-        "off" -> Amber.Dim to stringResource(R.string.radio_off)
-        else -> Amber.Dim to stringResource(R.string.radio_none)
+    // LoRa: green when an RNode is online; red when it needs attention (refused, or paired
+    // RNodes that don't answer); grey when there's none (radio off, none attached, connecting).
+    val loraState = status.optJSONObject("radio")?.optString("state", "off") ?: "off"
+    // Trying to connect (a Search now or a Use, or an RNode being connected): orange and green
+    // in turn, so it's clear something is happening.
+    val trying = status.optJSONObject("radio")?.optBoolean("busy") == true || loraState == "connecting"
+    var blink by remember { mutableStateOf(false) }
+    LaunchedEffect(trying) {
+        blink = false
+        while (trying) { kotlinx.coroutines.delay(500); blink = !blink }
+    }
+    val lora = if (trying) (if (blink) Amber.LightOn else Amber.LightTrying) else when (loraState) {
+        "online" -> Amber.LightOn
+        "refused", "searching" -> Amber.LightAttention
+        else -> Amber.LightOff
+    }
+    // Wi-Fi: grey off Wi-Fi; red when we have Wi-Fi Stumps open and none answers; else green.
+    val onWifi = WifiHttp.local.collectAsState().value != null
+    val ws = status.optJSONObject("wifi_stumps")
+    val wifi = when {
+        !onWifi -> Amber.LightOff
+        (ws?.optInt("open") ?: 0) > 0 && (ws?.optInt("online") ?: 0) == 0 -> Amber.LightAttention
+        else -> Amber.LightOn
     }
     Row(Modifier.clip(Medium).border(1.dp, Amber.Border, Medium).clickable(onClick = onClick)
-        .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(Small).background(color))
-        Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium.copy(color = if (state == "online") Amber.Text else Amber.Muted))
+        .padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Light(lora, "LoRa")
+        Spacer(Modifier.width(12.dp))
+        Light(wifi, "Wi-Fi")
+    }
+}
+
+@Composable
+private fun Light(color: Color, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(color))
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(color = Amber.Muted), modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -118,8 +140,10 @@ fun Field(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifi
  */
 @Composable
 fun Composer(hint: String, counter: @Composable (String) -> Unit = {}, onVoice: ((io.github.ruderigo.firefly.audio.Recorded) -> Unit)? = null,
-             onSend: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+             draft: MutableState<String>? = null, onSend: (String) -> Unit) {
+    // [draft] lets the screen put text in the box (a plugin's !word); otherwise the box keeps its own.
+    val own = remember { mutableStateOf("") }
+    var text by (draft ?: own)
     val recording = remember { RecordingState() }
     Column(Modifier.fillMaxWidth().background(Amber.Sidebar).navigationBarsPadding().imePadding()) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(Amber.Border))

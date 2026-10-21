@@ -100,6 +100,29 @@ ble2 = FakeRNodeLink(style="ble")
 links.ble["AA:BB:CC:DD:EE:01"] = ble2
 core.radio.search_now()
 wait(lambda: core.radio.status.state == "online", 25, "BLE RNode back in range: reconnected by itself")
+check(core.radio.snapshot().get("device") == "RNode 1A2B", f"status names the RNode in use ({core.radio.snapshot().get('device')})")
+
+print("-- two paired RNodes: Use switches")
+other = FakeRNodeLink(style="ble")
+links.ble["AA:BB:CC:DD:EE:02"] = other
+api.add_ble_device("aa:bb:cc:dd:ee:02", "RNode EA69")
+time.sleep(3)
+check(core.radio.status.port == "ble:AA:BB:CC:DD:EE:01", "pairing a second one doesn't take over the one in use")
+api.use_ble_device("aa:bb:cc:dd:ee:02")
+check(core.radio.snapshot()["busy"] is True, "Use: busy at once (the button waits, the light flashes)")
+wait(lambda: core.radio.status.state == "online" and core.radio.status.port == "ble:AA:BB:CC:DD:EE:02", 25,
+     "Use: switched to RNode EA69")
+wait(lambda: core.radio.snapshot()["busy"] is False, 10, "...and no longer busy once it's done")
+check(core.radio.snapshot().get("device") == "RNode EA69", "status names it")
+check(other.sf == 9, "it got the current settings")
+api.use_ble_device("aa:bb:cc:dd:ee:01")
+wait(lambda: core.radio.status.state == "online" and core.radio.status.port == "ble:AA:BB:CC:DD:EE:01", 25,
+     "Use: and back to RNode 1A2B")
+api.remove_ble_device("AA:BB:CC:DD:EE:02")
+
+api.radio_search_now()
+check(core.radio.snapshot()["busy"] is True, "Search now: busy at once")
+wait(lambda: core.radio.snapshot()["busy"] is False, 15, "...and not once the search is done")
 
 print("-- old firmware")
 api.remove_ble_device("AA:BB:CC:DD:EE:01")

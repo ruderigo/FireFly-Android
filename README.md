@@ -8,9 +8,314 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.4.1: local-network discovery and stuck message states fixed.** Phase 1 complete. Built and field-tested: BLE and USB
+Status: **0.5.0: one person on a Stump, over LoRa and Wi-Fi** (for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
-Opus voice notes everywhere, and delivery with the screen locked.
+Opus voice notes everywhere, and delivery with the screen locked. Betas are
+made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
+alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.0: one person on a Stump, over LoRa and Wi-Fi
+Everything from the ten betas below, in short:
+- **The greeting:** on a Stump's Wi-Fi FireFly says who it is by itself
+  (`/hello`, both sides signing; `/auth` + `/nick` on older Stumps), so you
+  are one person there, under your name, with your DMs reaching you over
+  Wi-Fi or LoRa as you choose (Settings › Stump messages).
+- **Stumps found by who they are, not where they are:** Find Stumps asks
+  the Wi-Fi (`STUMP?`), a Stump the router moved is followed to its new
+  address with its history, and the gateway of a home Wi-Fi is no longer
+  taken for a Stump.
+- **No radio, no dead ends:** a Stump reached over LoRa and Wi-Fi opens on
+  the side that can reach it; real reasons instead of "-1" or a false
+  "too fast"; Verify that can't succeed says why at once.
+- **Private messages:** one conversation per person across LoRa and Wi-Fi,
+  renames followed, Delete and Block.
+- **Screens:** LoRa and Wi-Fi lights (green, red, grey; orange-green while
+  connecting), a steady Stumps list, Stump over Wi-Fi in the Network tab,
+  the RNode in use named, Use to switch RNodes, the version in Settings.
+- **Stump 1.0.0-beta.19 to beta.33:** room renames, hybrid and closed
+  access, busy Stumps (503), upload limits, rescue starts.
+- From 0.4.1: local-network discovery on Android, message states that no
+  longer get stuck.
+
+### 0.5.0-beta.10: a steadier Stumps tab, two connection lights
+- **The Stumps list keeps still:** it's sorted by name. It was sorted by
+  "last heard", so Stumps close to each other kept swapping places.
+- **"Stump over Wi-Fi"** (open a Stump by its address) moved from the
+  Stumps tab to the Network tab.
+- **Two lights at the top instead of the radio label:** **LoRa** and
+  **Wi-Fi**, each green (working), red (needs attention) or grey (not
+  connected). LoRa: green with an RNode online; red when one is refused or
+  the paired ones don't answer; grey when there's none. Wi-Fi: grey off
+  Wi-Fi; red when the Wi-Fi Stumps you have open all stopped answering;
+  green otherwise. A tap still opens the Network tab.
+- The Network tab's traffic counter goes up to GB.
+- **Connecting shows:** after **Search now** or **Use**, the buttons wait
+  ("Searching…", "Connecting…" on the RNode being connected) until the
+  radio has done it, and the **LoRa** light flashes orange and green
+  meanwhile (also while an RNode is being connected on its own).
+- **Private messages on a Stump, whichever way they came** (field fix): a
+  Stump reached over LoRa and Wi-Fi is one row but two entries, and a DM
+  that arrived over LoRa (to the phone's old nick) was counted on the row
+  but not shown, because the row opens the Wi-Fi side. A Stump's private
+  messages are now one conversation per person across both; a reply from
+  the LoRa side with no radio goes over Wi-Fi.
+- **Delete and block in a Stump's private messages:** long-press a
+  conversation (or use its ⋮ menu). Delete removes it from this phone;
+  Block also drops that nick's private messages on this Stump from then
+  on, without a notification (the Stump has no block of its own, so it
+  still carries them). Blocked nicks are listed under the conversations,
+  with Unblock.
+- **One person on a Stump over Wi-Fi and LoRa** (Stump 1.0.0-beta.25):
+  FireFly now verifies itself (`/auth`) as soon as it connects over Wi-Fi,
+  without a tap, so the Stump can join your Wi-Fi and LoRa sides into one
+  person (one nick, private messages reaching you either way). Quietly: no
+  line in the room, and a Stump that doesn't answer leaves no "failed".
+- **The greeting** (Stump 1.0.0-beta.31, "one person, one name"): on every
+  Wi-Fi connection FireFly says who it is before anything else, `/auth`
+  then `/nick <Your name>` (just `/auth` when the Stump already heard the
+  name on LoRa), and again whenever the Stump asks (`"hello":
+  "required"`). Until then a line you type waits and then goes out; the
+  screen keeps what it showed. A new name in Settings reaches the Wi-Fi
+  Stumps too (`/nick`). The phone is then one person on the Stump, listed
+  once under your name, with your DMs reaching you over Wi-Fi.
+- **`/hello`** (Stump 1.0.0-beta.32/33): the greeting is now one exchange
+  where both sides sign. FireFly checks the Stump's signature (and that
+  its key is the one behind its LXMF address, and the Stump it knows at
+  that address) before it introduces itself with its own signature, your
+  name and your route. An impostor gets nothing; a real but different
+  Stump at that address sends FireFly looking for yours. A 429 is waited
+  out. Older Stumps still get `/auth` + `/nick`.
+- **Route toggle,** Settings › Stump messages: **Over Wi-Fi** (in the app
+  while it's connected) or **Over LoRa** (always by radio). Changing it,
+  or your name, says `/hello` again to the Stumps you're on.
+- **Rescue start:** a Stump that says so (`/node.json` `"mode":
+  "rescue"`) gets a line on its screen: no radio, chain or plugins for
+  now, Wi-Fi chat works.
+- **Renames followed:** when someone changes nick (the poll's new
+  `"renamed"`), their private conversation, and a block, follow the new
+  name.
+- **A busy Stump** (`503`, Stump 1.0.0-beta.24's connection limits): FireFly
+  waits 2 s and asks again, instead of calling it offline or losing a line.
+
+### Checked against Stump 1.0.0-beta.22 and beta.23
+Nothing a client reads changed (beta.22 and beta.23 are about a computer
+Stump's storage and stopping). Computer Stumps now accept uploads, so
+FireFly's Files tab can upload to a Stump on a Mac or PC:
+`engine-tests/run_real_upload.py <SandBox_Stump_On>` sends FireFly's own
+upload request to a real one (a name with accents included), finds the
+file in FireFly's list, and checks that a too-big one gets the 507 answer
+FireFly shows. The Network tab's traffic counter now goes up to GB.
+
+### 0.5.0-beta.9: a Stump is kept by who it is, not where it is (Stump 1.0.0-beta.21)
+A home router moves a laptop Stump from address to address; FireFly kept
+the old one. Now a Stump is kept by its identity (its LXMF address) and
+found on the Wi-Fi by asking:
+- **Find Stumps asks the network** (`STUMP?` on UDP 4244, as soon as it
+  opens): every Stump that answers is listed with its name, wherever the
+  router put it. The ones those Stumps heard (`/stumps.json`) are listed
+  too, and the old address sweep still finds older Stumps.
+- **A Stump that stops answering is found again** by its identity and
+  followed to its new address: same entry, same history, a line saying
+  "found macOS at its new address", and the line that failed is sent
+  there. An open chat screen follows it.
+- **Wi-Fi when it answers, LoRa when there's a radio:** a Stump known only
+  over LoRa that answers on the Wi-Fi gets a Wi-Fi entry (the Stumps tab
+  asks when it opens), and with no radio its LoRa screen looks for it on
+  the Wi-Fi by itself.
+- The `stump.node` beacon's new fifth item (its web addresses) is read.
+- Checked against a real computer Stump (1.0.0-beta.21, its own
+  `stump_pc.py`): `engine-tests/run_real_discovery.py <SandBox_Stump_On>`.
+  It found two things, both fixed: when a Stump's answer names no address
+  on the phone's network, FireFly now tries the address it answered from
+  (with its port) before the others, and keeps the first that answers as
+  that Stump; and a saved Stump keeps its name ("macOS") when it is
+  reopened or followed, instead of showing "Stump Wi-Fi (address)" until
+  its first poll.
+- **Hybrid, as Stump 1.0.0-beta.21 now means it** (everyone reads every
+  room and writes in `#main`; writing elsewhere takes Verify): a line
+  written elsewhere before Verify is kept, marked "not sent: only verified
+  people write in this room", and a tap sends it again once verified; a
+  private message fails with the same reason. In a closed (`mandatory`)
+  Stump the room stays empty with the Stump's topic saying why, and fills
+  in after Verify.
+- **Version on screen:** Settings › About and the start screen show the
+  version and build number ("0.5.0-beta.9 (build 25)").
+- **Which RNode:** the Network tab's radio section names the RNode in use
+  ("RNode EA69", its Bluetooth name; a USB device's name; a Wi-Fi host).
+- **Use, under Paired RNodes:** switch to another paired RNode at once (it
+  is then tried first from then on); the one in use says "in use".
+
+### 0.5.0-beta.8: home Wi-Fi is not a Stump's hotspot (from the Stump team's notes)
+On home Wi-Fi with no radio, the "Stump over Wi-Fi" box offered the
+gateway (the router) as "the Stump you're next to"; sends went there and
+came back as a bare "send failed (-1)".
+- **An address is a Stump only once it says so.** The gateway is asked
+  `/node.json` first: a Stump shows its name, anything else is called
+  your router. **Connect** checks too (port 80, then 8080) and, when no
+  Stump answers, says what's there instead ("connection refused", "a web
+  page, but not a Stump") with a shortcut to Find Stumps.
+- **The same Stump typed at a new address replaces its old entry** at
+  once, without waiting for the first poll.
+- **Real reasons instead of -1:** a line that never reached the node is
+  drawn "not sent (the Stump didn't answer)" with the reason beside it;
+  "too fast" now comes only from the node's own ⧗. An offline Wi-Fi Stump
+  says why in its header.
+- **Verify** ends at once when `/auth` can't be sent, with the reason.
+- **No radio and no Wi-Fi entry yet:** the LoRa side offers **Find over
+  Wi-Fi**.
+- FireFly still keeps no cookies, so a Stump knows it by its address and
+  the one-button `/auth` keeps working; the browsers' visitor ID
+  (`stump_v`, Stump 1.0.0-beta.19) is left for later.
+
+### 0.5.0-beta.7: a Stump that moved, a phone with no radio (field fix)
+Reported with a Stump on a Mac and a phone without its RNode: the Stump
+showed "LoRa + Wi-Fi", but `/join` did nothing, Verify never finished,
+and every line came back "not sent (too fast)". The router had given the
+Mac a new address, so the saved Wi-Fi entry was offline, and the entry
+fell back to its LoRa side, which had no radio to send with.
+- **A Stump found at a new address replaces its old entry** (matched by
+  the LXMF address its poll gives).
+- **The merged entry opens what can reach the Stump:** Wi-Fi while it
+  answers, LoRa only when the radio (or another path) can carry it, else
+  Wi-Fi.
+- **A LoRa side with nothing to carry it says so** ("No radio: nothing
+  can be sent over LoRa"), with **Open over Wi-Fi** when the Stump has a
+  Wi-Fi entry.
+- **Verify** fails at once over LoRa with no way to the Stump, and gives
+  up after its window if nobody answers, instead of "verifying" forever.
+- **Failed lines say why:** "not sent (too fast)" only when the node
+  refused it (`⧗`); "not delivered" when LoRa couldn't deliver it.
+- `/rooms`: `[LoRa]` read where `rrc.py` puts it, after the topic.
+
+### 0.5.0-beta.6: following Stump 1.0.0-beta.19
+Checked against the beta.19 CLIENT_QUICKSTART and `barkeep.py`.
+- **Radio settings checked against the Stump's.** A Stump's `/node.json`
+  now gives its radio (frequency, bandwidth, SF, CR). When FireFly's
+  differ, the node screen says so in red, with the Stump's settings and
+  **Use these** (TX power stays yours). A mismatched radio doesn't error:
+  it just never hears anything, so this was the hardest thing to notice.
+- **The node's radio state** (from the poll's `hw`) shows under its name:
+  on, connecting, problem, or no radio.
+- **`[LoRa]` rooms:** a Stump on a computer with its own Heltec may mark
+  `#lora-mesh` `[LoRa]` in `/rooms`; it's read as the room's tier now,
+  not glued to its topic.
+- Already right, checked: `#lora-mesh` shared between Stumps (lines as
+  `nick@thatstump`); FireFly never titles its messages `#lora-mesh` or
+  `#wifi-mesh` (that would mark it a Stump); its HTTP client keeps no
+  cookies, so a Stump still knows it by its address and `/auth` works as
+  before; in `hybrid`, FireFly over LoRa now counts as verified by its
+  signature alone, because it announces itself.
+
+### 0.5.0-beta.5: following Stump 1.0.0-beta.4
+Checked against the beta.4 CLIENT_QUICKSTART and `rrc.py`. Works with
+older nodes too: the Stump tests run against both.
+- **`#lxmf` is `#lora-mesh`.** FireFly keeps the name the node uses and
+  treats `lxmf`, `lora` and `lora-mesh` as one room (and `chained`/`mesh`
+  as `wifi-mesh`). It never renames a room itself: on an older node
+  `#lxmf` is still the real room. The landing room is learned from the
+  node's own `→ #room`, and history kept under `#lxmf` moves to
+  `#lora-mesh` once the node uses the new name.
+- **`⧗` for lines too fast** (3 at once, then one every 2 s): the line or
+  DM it refused shows **not sent**, and a tap sends it again. Over Wi-Fi
+  the reply names the exact line; over LoRa it's the last thing sent
+  within a minute. Voice notes and commands as before.
+- **Billboard:** `429 rate_limited` (3 posts a minute) says to wait a
+  moment. A search box on the Board, and on Files a search box plus
+  video / music / documents / pictures / other chips (`?q=`, `?cat=`;
+  applied by FireFly too on older nodes, accents ignored).
+- **Chains:** people on other Stumps (`rod@LaBuche`) are listed and
+  reachable like anyone; the Stumps themselves are grouped last with 🪵.
+- **Find Stumps** also tries port 8080, where a Stump on a computer may
+  serve, at the gateway and in the network search.
+
+### After 0.5.0-beta.4 (tests and docs)
+- Stump's Tools page now has a folder per tool, and `/tools.json` gained
+  `sections`; the FireFly apps live in `tools/firefly/` and their `url`
+  names that folder. The update offer already downloads from the `url` as
+  given, so nothing changed in the app. The test node serves the new shape
+  (and the old flat one), and the docs point to `tools/firefly/`.
+
+### 0.5.0-beta.4: `/node.json` as the Stump team shipped it
+- Find Stumps reads `/node.json` exactly as it landed on Stump `main`
+  (next release): name, LXMF address, `release` (firmware), hotspot
+  address, `chain` (`null` unless chained), and `features`. The card now
+  shows the release and what the node offers, and says so in red when a
+  node has chat switched off.
+- A `/node.json` whose name or LXMF address is `null` (no name set, LoRa
+  off) is still read as one. A beta.2 node answers `/node.json` with its
+  home page (HTML); that falls back to `/chain.json`, as before.
+
+### 0.5.0-beta.3: Find Stumps
+A **Find Stumps** button on the Stumps tab: every way to reach a Stump from
+where you stand, best link first. Nothing in it changes anything on a node:
+it never polls the chat, so no one sees a `✓ guest` join while you look.
+- **This Wi-Fi:** what answers at the gateway of the Wi-Fi you're on (a
+  lone Stump's `192.168.4.1`, or `192.168.n.1` along a chain), with its name
+  and chain role, and how steady the link is (five small round trips:
+  median time and how many were lost). A plain router is said to be one.
+- **Stump hotspots nearby:** a Wi-Fi scan, strongest first, with bars from
+  the signal. Hotspots you've used as Stumps, the firmware's default name,
+  or names with "stump" in them are marked; others are "maybe". **Join**
+  connects that hotspot for FireFly only (Android asks once), checks that
+  a Stump answers, remembers the name, and opens it; **Leave** gives the
+  phone's Wi-Fi back. In a chain, that's how you pick the closest Stump.
+  Android 8–9: join in the system settings instead. Scanning asks for the
+  Nearby devices permission (location before Android 13), only when you
+  tap Scan.
+- **On this network:** a Stump that joined the same router as you. FireFly
+  asks each address of your /24, 32 at a time (a few seconds), and lists
+  the Stumps that answer, steadiest first.
+- **Heard on LoRa:** hops, and RSSI/SNR of the last message from each Stump,
+  with bars from the SNR.
+- **One entry per Stump.** A Stump you reach over LoRa and Wi-Fi is one row
+  on the Stumps tab ("LoRa + Wi-Fi"), matched by the LXMF address its Wi-Fi
+  poll gives; it opens over Wi-Fi while that answers. Hide and Remove act
+  on both.
+- Identification asks `/node.json` first (name, version, LXMF address,
+  chain), requested from the Stump team for exactly this, then
+  `/chain.json` (beta.2), then `/files.json` or `/billboard.json` (older).
+
+### 0.5.0-beta.2: following Stump 1.0.0-beta.2 (chained Stumps)
+- **The Stump's address is your Wi-Fi's gateway.** Chained Stumps each
+  serve their own range (`192.168.5.1`, `192.168.6.1`…), so "Stump over
+  Wi-Fi" now fills in the gateway of the Wi-Fi you joined, and says which
+  it is. `192.168.4.1` (or your saved default) is only used off Wi-Fi.
+- **Chain status:** a Stump that's part of a chain says so under its name
+  ("first Stump of a chain" or "in a chain of Stumps"), from
+  `GET /chain.json`.
+- **Beacons with more fields** (later firmware may append them) are read
+  by their first four, as before; now tested.
+- Big transfers relayed onto LoRa stop at 48 KB per link every 10 minutes.
+  Nothing to change: a voice note (≤16 KB) and a propagation sync fit.
+
+### 0.5.0-beta.1: following Stump 1.0.0-beta.1
+Checked against the Stump beta's CLIENT_QUICKSTART and `barkeep.py`. Every
+change also works with an older node, and the tests run both.
+- **Billboard posts answered as data.** FireFly asks for JSON
+  (`Accept: application/json`): `201` with the post's id, `400
+  title_required`, or `507 storage` ("the node couldn't save the post"). An
+  older node still answers 303 whatever happened, and FireFly still proves
+  the post by reading the board back.
+- **Uploads answered as data**: the stored (sanitized) name, your credit
+  balance, slot deliveries, and an error token (`no_card`, `full`,
+  `interrupted`…) shown in the app's language instead of the node's sentence.
+- **Filenames:** on the hotspot the name still goes as raw UTF-8, which
+  every node reads. Over HTTPS it now goes percent-encoded with
+  `X-Filename-Encoding: url` (accents were dropped before).
+- **Plugins:** a node's plugin commands (`/plugins.json`) show as `!roll`,
+  `!8ball`… chips above the room box; a tap puts the word in the box.
+  stumpid and fservbot are left out, since their commands are slash only.
+- **`⧗` now means "slow down" for plugin commands too.** It names neither,
+  so it now fails a pending voice note only if the note was the last thing
+  sent, within the last minute. After a burst of `!roll` it shows in the
+  room instead of failing a note you sent earlier.
+- **Update from a Stump:** when a node's `/tools.json` carries a newer
+  FireFly for Android, the node screen offers it. **Get it** saves the APK
+  where you choose, and **Install** hands it to Android's installer (Android
+  asks once to let FireFly install apps). It installs over yours only if it's
+  signed with the same key. Versions compare as the node compares them, so
+  `0.5.0` beats `0.5.0-beta.1`.
+- Tags with a suffix (`v0.5.0-beta.1`) publish as GitHub pre-releases.
 
 ### 0.4.1: local-network discovery and stuck message states fixed
 - **Wi-Fi peers are found again.** "Local network" (Reticulum's AutoInterface)
@@ -371,7 +676,10 @@ Run from the repository root with `pip install rns==1.5.5 lxmf==1.2.0`:
 | `python3 engine-tests/run_stamps.py` | FireFly's stamp search through LXMF's own Android entry point: valid propagation and delivery stamps at costs 8-16 by LXMF's validator, timing, and cancellation the way LXMF cancels. |
 | `python3 engine-tests/run_propagation.py` | A real upstream LXMF propagation node on a Stump's identity (stamp cost 16, 2 KB limit). Found without its announce; stamps with multiprocessing unavailable; an offline friend and a never-online contact collect by sync; no-path messages go to the node at once; over-limit refused; multi-round sync with no duplicates; Stump chat and "off" never use the node; pin and automatic choice. |
 | (also in run_stump / run_air) | Hide keeps history and stays hidden while beaconing; remove deletes everything and a node on the air returns empty; deleting a conversation removes messages and voice notes and a new one starts normally. |
-| `python3 engine-tests/run_web.py` | Billboard and file shelf against the fake node: posting proven by refetch, a dropped post detected, 80/600 limits, `+` `$` and line breaks intact, UTF-8 download names, a UTF-8 `X-Filename` written on a raw socket stored exactly (with the node's filename rules), the node's 400/503/507 answers, and features switched off reading as "off". |
+| `python3 engine-tests/run_reach.py` | The Oct 18 field report: no radio, a Stump's saved Wi-Fi address gone stale. The merged entry doesn't open LoRa, the LoRa side offers Wi-Fi, Verify fails at once, and the Stump found at its new address replaces the old entry. |
+| `python3 engine-tests/run_discovery.py` | Five fake Stumps and a plain web server on loopback addresses (port 80, run as root): a sweep of the /24 finds exactly the Stumps in about a second, reads `/node.json` in the shape barkeep.py builds (nulls included), falls back to `/chain.json` when it's an HTML home page and to `/files.json` on older nodes, ranks the slow one last, and never polls the chat. Plus subnet sizes, bars and hotspot names. |
+| `python3 engine-tests/run_web.py` | Billboard, file shelf, plugins, apps and chain against the fake node, as a current node (JSON answers: 201/400/507 posts; upload name, balance and error tokens; percent-encoded and Latin-1 names; `/plugins.json`, `/tools.json` and version order; `/chain.json`; beacons with extra fields) and as an older one (`FAKE_STUMP_OLD=1`: posting proven by refetch, a dropped post detected, 80/600 limits, `+` `$` and line breaks intact, UTF-8 download names, a UTF-8 `X-Filename` written on a raw socket stored exactly (with the node's filename rules), the node's 400/503/507 answers, and features switched off reading as "off"). |
+| `FAKE_STUMP_OLD=1 python3 engine-tests/run_stump.py` | The same against a node from before Stump 1.0.0-beta.4: `#lxmf`, no line limits. |
 | `python3 engine-tests/run_stump.py` | A fake Stump over the mesh (LXMF) and over Wi-Fi (HTTP), covering everything in the Stump section above. |
 
 Kotlin was checked with `kotlinc` 2.2.10 for syntax only. An APK has not been

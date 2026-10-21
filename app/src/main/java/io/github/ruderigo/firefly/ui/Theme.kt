@@ -34,6 +34,11 @@ object Amber {
     val DmBody = Color(0xFFC8A2C8)
     val DmNick = Color(0xFFD8B4D8)
     val Error = Color(0xFFE07A5A)
+    // The connection lights (LoRa, Wi-Fi): working, needs attention, not connected.
+    val LightOn = Color(0xFF5DBB63)
+    val LightAttention = Color(0xFFE0483E)
+    val LightOff = Color(0xFF8A8580)
+    val LightTrying = Color(0xFFF0A030)   // orange, alternating with green while connecting
 }
 
 /** System fonts only: it has to render with no internet behind it. */

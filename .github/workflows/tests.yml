@@ -22,10 +22,10 @@ jobs:
     env:
       PYTHONUNBUFFERED: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Same Python as Chaquopy embeds in the app (chaquopy.defaultConfig.version).
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -48,6 +48,33 @@ jobs:
       - name: Stump chat over mesh and Wi-Fi
         timeout-minutes: 4
         run: python engine-tests/run_stump.py
+
+      - name: Stump chat with a node from before Stump 1.0.0-beta.4
+        timeout-minutes: 4
+        env:
+          FAKE_STUMP_OLD: "1"
+        run: python engine-tests/run_stump.py
+
+      - name: The greeting (/hello), and /auth + /nick on older Stumps
+        timeout-minutes: 3
+        run: |
+          python engine-tests/run_hello.py
+          python engine-tests/run_greeting.py
+          python engine-tests/run_auto_auth.py
+
+      - name: Hybrid access, private messages over LoRa and Wi-Fi, a steady list
+        timeout-minutes: 3
+        run: |
+          python engine-tests/run_hybrid.py
+          python engine-tests/run_dm_sides.py
+          python engine-tests/run_order.py
+
+      - name: A Stump that moved, a phone with no radio, home Wi-Fi
+        timeout-minutes: 4
+        run: |
+          python engine-tests/run_relocate.py
+          python engine-tests/run_reach.py
+          python engine-tests/run_gateway.py
 
       - name: Stump node without Opus
         timeout-minutes: 2
@@ -77,16 +104,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
       - name: Set up Python 3.13 (Chaquopy builds with it)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 

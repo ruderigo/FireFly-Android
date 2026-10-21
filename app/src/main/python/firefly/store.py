@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS stump_nodes (
     auth_detail  TEXT,
     online       INTEGER DEFAULT 0,
     last_seen    REAL,
-    active       INTEGER DEFAULT 1
+    active       INTEGER DEFAULT 1,
+    lxmf         TEXT                  -- the node's LXMF address (Wi-Fi: from the poll's node field)
 );
 CREATE TABLE IF NOT EXISTS stump_lines (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,9 +83,16 @@ CREATE TABLE IF NOT EXISTS stump_lines (
     ts          REAL NOT NULL,
     mine        INTEGER DEFAULT 0,
     msg_id      INTEGER,               -- our LXMF message carrying it (mesh), for delivery state
-    remote_id   INTEGER
+    remote_id   INTEGER,
+    local_state TEXT                   -- 'failed' when the node refused it (⧗), whatever LXMF says
 );
 CREATE INDEX IF NOT EXISTS stump_lines_room ON stump_lines(node, room, id);
+CREATE TABLE IF NOT EXISTS stump_blocked (  -- nicks whose private messages are dropped, per Stump
+    stump       TEXT NOT NULL,         -- the Stump's LXMF address (else its entry key)
+    nick        TEXT NOT NULL,         -- lower case
+    ts          REAL NOT NULL,
+    PRIMARY KEY (stump, nick)
+);
 CREATE TABLE IF NOT EXISTS stump_dms (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     node        TEXT NOT NULL,
@@ -119,6 +127,10 @@ class Store:
             for col, kind in (("audio_mode", "INTEGER"), ("audio", "BLOB"), ("audio_ms", "INTEGER")):
                 if col not in cols:
                     self.db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
+        if "lxmf" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_nodes)")}:
+            self.db.execute("ALTER TABLE stump_nodes ADD COLUMN lxmf TEXT")
+        if "local_state" not in {r[1] for r in self.db.execute("PRAGMA table_info(stump_lines)")}:
+            self.db.execute("ALTER TABLE stump_lines ADD COLUMN local_state TEXT")
         self.db.commit()
         self.version = 0
 
@@ -266,7 +278,7 @@ class Store:
     # ---------------------------------------------------------------- stump nodes
     def upsert_stump_node(self, key, transport, address, **fields):
         allowed = {"name", "room", "nick", "topic", "rooms", "users", "stumps", "auth", "auth_detail",
-                   "online", "last_seen", "active"}
+                   "online", "last_seen", "active", "lxmf"}
         with self.lock:
             if not self.db.execute("SELECT 1 FROM stump_nodes WHERE key=?", (key,)).fetchone():
                 self._write("INSERT INTO stump_nodes(key, transport, address, auth) VALUES (?,?,?,'none')",
@@ -286,9 +298,36 @@ class Store:
                     self._write(f"UPDATE stump_nodes SET {', '.join(k + '=?' for k, _ in changed)} WHERE key=?",
                                 (*[v for _, v in changed], key))
 
+    def rekey_stump(self, old, new, new_address):
+        """The same Stump at a new address: its rooms and DMs move to `new`. If `new`
+        already exists, the old row goes (a verified status carries over)."""
+        with self.lock:
+            # Lines both entries fetched from the Stump (same id and time) are kept once.
+            self.db.execute("""DELETE FROM stump_lines WHERE node=? AND remote_id IS NOT NULL AND EXISTS
+                (SELECT 1 FROM stump_lines n WHERE n.node=? AND n.remote_id=stump_lines.remote_id
+                 AND n.ts=stump_lines.ts)""", (old, new))
+            self.db.execute("UPDATE stump_lines SET node=? WHERE node=?", (new, old))
+            self.db.execute("UPDATE stump_dms SET node=? WHERE node=?", (new, old))
+            if self.db.execute("SELECT 1 FROM stump_nodes WHERE key=?", (new,)).fetchone():
+                o = self.db.execute("SELECT auth, auth_detail, room, nick FROM stump_nodes WHERE key=?", (old,)).fetchone()
+                if o and o[0] == "ok":
+                    self.db.execute("UPDATE stump_nodes SET auth='ok', auth_detail=? WHERE key=? AND auth!='ok'",
+                                    (o[1], new))
+                self.db.execute("DELETE FROM stump_nodes WHERE key=?", (old,))
+            else:
+                self.db.execute("UPDATE stump_nodes SET key=?, address=?, active=1 WHERE key=?", (new, new_address, old))
+            self.db.commit()
+            self.version += 1
+
     def stump_node(self, key):
         rows = self._read("SELECT * FROM stump_nodes WHERE key=?", (key,))
         return _decode_node(rows[0]) if rows else None
+
+    def last_signal(self, peer):
+        """RSSI/SNR of the last packet received from this peer over a radio, if any."""
+        rows = self._read("SELECT rssi, snr, ts FROM messages WHERE peer=? AND outgoing=0 AND snr IS NOT NULL"
+                          " ORDER BY ts DESC LIMIT 1", (peer,))
+        return dict(rows[0]) if rows else None
 
     def stump_nodes(self):
         rows = self._read("""
@@ -318,9 +357,16 @@ class Store:
                 self._write("UPDATE stump_lines SET room=? WHERE node=? AND room=? AND mine=1 AND ts>=?",
                             (to_room, node, from_room, since_ts))
 
+    def set_line_state(self, line_id, state):
+        self._write("UPDATE stump_lines SET local_state=? WHERE id=?", (state, line_id))
+
+    def rename_room(self, node, old, new):
+        """A room the node now calls by another name (#lxmf -> #lora-mesh): its history follows."""
+        self._write("UPDATE stump_lines SET room=? WHERE node=? AND room=?", (new, node, old))
+
     def lines(self, node, room, limit=200):
         rows = self._read("""
-            SELECT l.*, m.state AS state, m.reason AS reason
+            SELECT l.*, COALESCE(l.local_state, m.state) AS state, m.reason AS reason
             FROM stump_lines l LEFT JOIN messages m ON m.id = l.msg_id
             WHERE l.node=? AND l.room=? ORDER BY l.id DESC LIMIT ?""", (node, room, limit))
         return rows[::-1]
@@ -354,25 +400,54 @@ class Store:
         return self._read(f"SELECT {self._DM_COLS} FROM stump_dms WHERE node=? AND outgoing=1 AND state='pending'"
                           " ORDER BY id", (node,))
 
+    # A Stump reached over LoRa and Wi-Fi is two entries (keys); its private messages are
+    # one conversation per person, whichever way each one came in. `node` is a key or a list.
+    @staticmethod
+    def _nodes(node):
+        nodes = [node] if isinstance(node, str) else list(node)
+        return nodes, ",".join("?" * len(nodes))
+
     def dm_thread(self, node, nick, limit=300):
-        rows = self._read(f"SELECT {self._DM_COLS} FROM stump_dms WHERE node=? AND nick=? ORDER BY id DESC LIMIT ?",
-                          (node, nick, limit))
+        nodes, q = self._nodes(node)
+        rows = self._read(f"SELECT {self._DM_COLS} FROM stump_dms WHERE node IN ({q}) AND nick=? ORDER BY ts DESC, id DESC LIMIT ?",
+                          (*nodes, nick, limit))
         return rows[::-1]
 
     def dm_threads(self, node):
-        return self._read("""
+        nodes, q = self._nodes(node)
+        return self._read(f"""
             SELECT d.nick, d.body, d.ts, d.outgoing, d.state,
-                   (SELECT COUNT(*) FROM stump_dms u WHERE u.node=d.node AND u.nick=d.nick AND u.unread=1) AS unread
+                   (SELECT COUNT(*) FROM stump_dms u WHERE u.node IN ({q}) AND u.nick=d.nick AND u.unread=1) AS unread
             FROM stump_dms d
-            WHERE d.node=? AND d.id = (SELECT MAX(id) FROM stump_dms x WHERE x.node=d.node AND x.nick=d.nick)
-            ORDER BY d.id DESC""", (node,))
+            WHERE d.node IN ({q}) AND d.id = (SELECT MAX(id) FROM stump_dms x WHERE x.node IN ({q}) AND x.nick=d.nick)
+            ORDER BY d.id DESC""", (*nodes, *nodes, *nodes))
+
+    def delete_dm_thread(self, node, nick):
+        """The whole private conversation with `nick` on this Stump (every entry of it)."""
+        nodes, q = self._nodes(node)
+        self._write(f"DELETE FROM stump_dms WHERE node IN ({q}) AND nick=?", (*nodes, nick))
+
+    def rename_dm_nick(self, node, old, new):
+        """Someone's new nick: their private conversation follows it."""
+        nodes, q = self._nodes(node)
+        self._write(f"UPDATE stump_dms SET nick=? WHERE node IN ({q}) AND nick=?", (new, *nodes, old))
+
+    def block_stump_nick(self, stump, nick):
+        self._write("INSERT OR REPLACE INTO stump_blocked(stump, nick, ts) VALUES (?,?,?)",
+                    (stump, nick.lower(), time.time()))
+
+    def unblock_stump_nick(self, stump, nick):
+        self._write("DELETE FROM stump_blocked WHERE stump=? AND nick=?", (stump, nick.lower()))
+
+    def stump_blocked(self, stump):
+        return [r["nick"] for r in self._read("SELECT nick FROM stump_blocked WHERE stump=? ORDER BY nick", (stump,))]
 
     def mark_dms_read(self, node, nick):
+        nodes, q = self._nodes(node)
         with self.lock:
-            if self.db.execute("SELECT 1 FROM stump_dms WHERE node=? AND nick=? AND unread=1",
-                               (node, nick)).fetchone():
-                self._write("UPDATE stump_dms SET unread=0 WHERE node=? AND nick=?", (node, nick))
-
+            if self.db.execute(f"SELECT 1 FROM stump_dms WHERE node IN ({q}) AND nick=? AND unread=1",
+                               (*nodes, nick)).fetchone():
+                self._write(f"UPDATE stump_dms SET unread=0 WHERE node IN ({q}) AND nick=?", (*nodes, nick))
 
 def _decode_node(row):
     for k in ("rooms", "users", "stumps"):

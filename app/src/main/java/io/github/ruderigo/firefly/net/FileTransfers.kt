@@ -32,6 +32,14 @@ object FileTransfers {
         val status: Int = 0,
         /** The node's own text ("Uploaded. Your balance: 4"), or the error. */
         val message: String = "",
+        /** From a node that answers as data: the stored (sanitized) name, the credit
+         *  balance (null with credits off or for a slot), and the error token. */
+        val storedName: String? = null,
+        val balance: Int? = null,
+        val slot: Boolean = false,
+        val error: String? = null,
+        /** Where a download was saved (the document the user picked). */
+        val target: Uri? = null,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -97,7 +105,7 @@ object FileTransfers {
     /** GET /download?f=…, streamed into the document the user picked. */
     fun download(context: Context, nodeKey: String, url: String, name: String, size: Long, target: Uri) {
         if (busy) return
-        _current.value = Transfer(Kind.DOWNLOAD, nodeKey, name, total = size)
+        _current.value = Transfer(Kind.DOWNLOAD, nodeKey, name, total = size, target = target)
         scope.launch {
             val cr = context.contentResolver
             val result = try {
@@ -116,7 +124,17 @@ object FileTransfers {
     }
 
     private fun finish(r: HttpResult, ok: Boolean) {
-        val text = String(r.body, Charsets.UTF_8).trim().take(300)
-        _current.value = _current.value?.copy(state = if (ok) State.DONE else State.FAILED, status = r.status, message = text)
+        val text = String(r.body, Charsets.UTF_8).trim()
+        // A current node answers an upload as {"ok", "error", "name", "balance", "slot", "message"}
+        // when asked; an older one with a plain sentence.
+        val json = if (text.startsWith("{")) runCatching { org.json.JSONObject(text) }.getOrNull() else null
+        _current.value = _current.value?.copy(
+            state = if (ok) State.DONE else State.FAILED, status = r.status,
+            message = json?.optString("message")?.takeIf { it.isNotBlank() } ?: text.take(300),
+            storedName = json?.optString("name")?.takeIf { it.isNotBlank() },
+            balance = json?.takeIf { it.has("balance") && !it.isNull("balance") }?.optInt("balance"),
+            slot = json?.optBoolean("slot") ?: false,
+            error = json?.optString("error")?.takeIf { it.isNotBlank() },
+        )
     }
 }

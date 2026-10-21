@@ -189,6 +189,20 @@ fun SettingsScreen() {
                 }
             }
 
+            // ---------------------------------------------------------- Stump route (instant)
+            // Where a Stump sends your private messages while you're on its Wi-Fi too (its /hello
+            // "prefer", Stump 1.0.0-beta.32): like the Stump's own USB / Bluetooth switch.
+            Section(stringResource(R.string.stump_route)) {
+                Row {
+                    listOf("wifi" to R.string.stump_route_wifi, "lora" to R.string.stump_route_lora).forEach { (v, label) ->
+                        Chip(stringResource(label), s.optString("stump_prefer", "wifi") == v) {
+                            commitSettings(JSONObject().put("stump_prefer", v))
+                        }
+                    }
+                }
+                Text(stringResource(R.string.stump_route_help), style = MaterialTheme.typography.bodySmall)
+            }
+
             // ---------------------------------------------------------- Voice note quality (instant)
             Section(stringResource(R.string.voice_quality)) {
                 val current = s.optInt("voice_mode", 0)
@@ -281,6 +295,8 @@ fun SettingsScreen() {
 
             Section(stringResource(R.string.about)) {
                 Text(stringResource(R.string.about_text), style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+                KeyValue(stringResource(R.string.version), versionLabel(ctx))
                 Button(stringResource(R.string.quit), primary = false, modifier = Modifier.padding(top = 10.dp)) { EngineService.quit(ctx) }
             }
             Spacer(Modifier.height(72.dp))         // room for the banner over the last section

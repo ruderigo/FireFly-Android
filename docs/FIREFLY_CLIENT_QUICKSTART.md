@@ -1,6 +1,6 @@
 # FireFly client quickstart: interoperating with FireFly
 
-FireFly for Android 0.4.0 · October 2026
+FireFly for Android 0.5.0-beta.6 · October 2026 (Stump 1.0.0-beta.19) (Stump 1.0.0-beta.2)
 
 A client interoperates with FireFly if it speaks standard LXMF and reads and writes LXMF's audio field the way this guide describes. Nothing here is FireFly-only: it's LXMF, Reticulum, and the Stump node's own protocol.
 
@@ -231,16 +231,48 @@ valid = int.from_bytes(h.digest(), "big") <= (1 << (256 - cost))
 - **One at a time:** requests made during a sync join it rather than start a second.
 - **Retries:** a failed round is retried after 10 s, then 30 s.
 
-## A Stump's billboard and files (Wi-Fi only)
+## A Stump's billboard, files, plugins and apps (Wi-Fi only)
 
-FireFly 0.4.0 shows a node's billboard and file shelf from the node's JSON endpoints (the Stump quickstart's reference has the formats). Neither rides the mesh. A few things the endpoints don't make obvious:
+FireFly shows a node's billboard and file shelf, offers its plugin commands, and offers a newer FireFly from its card, all from the node's JSON endpoints (the Stump quickstart's reference has the formats). None of it rides the mesh. What the endpoints don't make obvious, and how FireFly handles nodes from before Stump 1.0.0-beta.1:
 
-- **A 404 means the feature is off.** FireFly hides that tab rather than showing an error.
-- **`POST /post` always answers 303**, even when the node silently drops an empty post. FireFly reads `/billboard.json` back and only reports success when a new post with that title is there.
+- **The node's address is the Wi-Fi's gateway**, not always `192.168.4.1`: chained Stumps use `192.168.5.1`, `192.168.6.1`… FireFly reads the gateway from the joined network's default route (`LinkProperties`) and offers it.
+- **A 404 means the feature is off** (or the node predates it). FireFly hides that tab or offer rather than showing an error.
+- **Ask for JSON on writes.** With `Accept: application/json`, `POST /post` answers `201 {"ok": true, "id"}`, `400 title_required` or `507 storage`, and `POST /upload` answers `{"ok", "error", "name", "balance", "slot", "message"}`. Act on `error`, a stable token; `message` is for people. An older node ignores the header: `/post` answers 303 whatever happened (read `/billboard.json` back and look for a new post with your title), and `/upload` answers a plain sentence.
 - **Form fields:** UTF-8, percent-encoded, spaces as `%20` (a `+` in the text is sent as `%2B`). The title's line breaks become spaces (80 characters); the body keeps them (600).
-- **`X-Filename` is read as UTF-8 and not URL-decoded.** Send the filename's UTF-8 bytes as they are: a percent-encoded name is stored with its `%` escapes. Android's `HttpURLConnection` (and OkHttp) refuse non-ASCII header values, and browsers and Python's `urllib` send `é` as one Latin-1 byte, which the node can't decode: the request then ends with **no response at all**. FireFly writes the upload on a plain socket to get UTF-8 through.
+- **Filenames on upload.** Two ways work on current nodes: the name's raw UTF-8 bytes, or the name percent-encoded with `X-Filename-Encoding: url`. Only raw UTF-8 also works on older nodes, which don't know the encoding header (they keep the `%` escapes) and closed the connection with no answer on a Latin-1 byte. Android's `HttpURLConnection` refuses non-ASCII header values, so on the node's hotspot (plain HTTP) FireFly writes the upload request on a socket with the name as UTF-8; over HTTPS it percent-encodes.
 - **Downloads:** `/download?f=` with the name percent-encoded as UTF-8. Stream the body to storage; files can be large.
-- **Credits** are per client address on the node's network, so they follow your phone's IP on that network, not your identity.
+- **Credits** are per client address on the node's network, so they follow your phone's IP there, not your identity.
+- **Plugins:** `/plugins.json` lists each plugin's commands. FireFly offers them as `!word` (the `trigger`), except stumpid's and fservbot's, which are slash only. A `!word` is an ordinary room line; the plugin answers in the room from its own nick.
+- **`⧗` names nothing.** It answers lines too fast (3 at once, then one every 2 s), too many voice notes, plugin commands or wrong passwords, and what it answers wasn't sent. Over HTTP the reply to `POST /rrc/send` belongs to the line you sent, so FireFly marks exactly that line or DM *not sent* (tap to resend); over LXMF it marks the last thing it sent within a minute.
+- **Room names:** `#lxmf` became `#lora-mesh` in Stump 1.0.0-beta.4 (the node still accepts `lxmf` and `lora`). Keep the name the node replies with and compare rooms through the aliases; don't rename `#lxmf` yourself, since on an older node that's still the real room.
+- **Updates:** `/tools.json` lists the FireFly apps on the node's card (in its `tools/firefly/` folder since the tool sections; `file` is still the bare name, and the `url` names the folder, so always download from the `url` as given). Compare versions as the node does: split on `.`, numbers as numbers, anything else (`0-beta`) below any number, so `0.5.0-beta.1` < `0.5.0`. Download from the `url` given; it installs over an existing app only if signed with the same key.
+
+## Finding Stumps without joining their chat
+
+**Keep a Stump by its identity, not its address.** On a home Wi-Fi the router hands out addresses and can change them (a laptop Stump went .172 → .175 → .176 in a week). FireFly keeps each Stump by its LXMF address (`lxmf`), which never changes, and treats the Wi-Fi address as a cache. Since Stump 1.0.0-beta.21:
+
+- **`STUMP?`**: FireFly sends a UDP datagram `STUMP? v1` to port 4244, broadcast (`255.255.255.255` and the subnet's broadcast address), from a socket bound to the Wi-Fi network while holding a `WifiManager.MulticastLock`, and collects answers for 1.5 s. Each Stump answers with `{"stump": 1, "name", "lxmf", "release", "http": [...], "here"}`; FireFly opens `here`, or else the `http` address it answered from. Find Stumps does this as soon as it opens.
+- **`GET /stumps.json`** on each Stump found: the other Stumps it heard, with their addresses. Those on the phone's network are checked with `/node.json` and listed as "heard by another Stump".
+- **The beacon's fifth item**, the same address list, is kept per `lxmf` and tried when nothing answers `STUMP?`.
+- **When a Wi-Fi Stump stops answering** (connection refused, timeout), FireFly asks again by its `lxmf` (at most every 15 s), moves the entry to the new address with its history ("found macOS at its new address"), and resends the line that failed there. A `/auth` isn't carried over: Verify again.
+- **A Stump known only over LoRa that answers on the Wi-Fi** gets a Wi-Fi entry, so it's chatted with over Wi-Fi; with no radio, its LoRa screen looks for it on the Wi-Fi by itself.
+- An address is called a Stump only once it answers `STUMP?` or `GET /node.json`; the Wi-Fi's gateway is a Stump only on a Stump's own hotspot.
+
+For older Stumps (no `STUMP?` answer), Find Stumps also probes addresses (the Wi-Fi gateway, each address of the local /24, a hotspot just joined) without changing anything on a node. **Never use `/rrc/poll` to probe**: it makes you a chat user, and everyone in the room sees `✓ guest-…`. FireFly asks, in order:
+
+1. `GET /node.json` (Stump `main`, after 1.0.0-beta.2): `{"name", "lxmf", "version", "release", "ap_ip", "chain", "features"}`. `chain` is `null` unless the node is chained, then the `/chain.json` object; `name` and `lxmf` can be `null`. A beta.2 node answers this path with its home page (HTML): anything that isn't a JSON object means "try the next request". FireFly shows `release` and `features`, and flags a node whose `features` lacks `chat`.
+2. `GET /chain.json`: any 1.0.0-beta.2 node answers `{"enabled": …}`, which identifies a Stump (no name).
+3. `GET /files.json` or `/billboard.json`: older nodes, when they offer those.
+
+How steady a link is: five small GETs of the same endpoint, one after another; the median time and the count lost give 0–3 bars (3: none lost and under 150 ms; 2: at most one in five lost and under 400 ms; 1: under 60 % lost). Wi-Fi signal: ≥ −60 dBm 3 bars, ≥ −72 dBm 2, ≥ −85 dBm 1. LoRa: SNR of the last packet heard, ≥ 5 dB 3 bars, ≥ −3 dB 2, ≥ −10 dB 1 (SF8 decodes to about −10 dB).
+
+The same Stump reached over LoRa and Wi-Fi is matched by the `node.lxmf` address in `/rrc/poll` (or `/node.json`), so a client can show it once.
+
+## Matching the Stump's radio
+
+Every node of a mesh needs the same radio settings, and a mismatch shows no error: nothing is ever heard. Since Stump 1.0.0-beta.5, `GET /node.json` has `"radio": {"frequency", "bandwidth", "sf", "cr"}` (Hz, Hz, 7–12, 5–8 for 4/5–4/8), present only when the node has a radio. FireFly compares it with its own settings when you open a Stump over Wi-Fi and offers to use them (TX power is left alone). The poll's `hw` (`{"state": "none"|"online"|"connecting"|"error", "title"}`) is the node's radio status light.
+
+Two things not to do over LXMF: don't title your own messages to a Stump `#lora-mesh` or `#wifi-mesh`, and don't start a line with `[DM>`. A Stump takes either as a sign the sender is another Stump.
 
 ## Blocking and deleting
 

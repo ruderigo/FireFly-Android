@@ -1,10 +1,14 @@
 name: Build & Release APK
 
-# Push a tag like v0.4.0 (matching versionName in app/build.gradle.kts) to build the
+# Push a tag like v0.5.0 or v0.5.0-beta.1 (matching versionName in app/build.gradle.kts) to build the
 # release APK, signed with your key, and publish it as a GitHub Release.
 # "Run workflow" by hand builds the same APK as a downloadable artifact, no release.
-# Secrets: FIREFLY_KEYSTORE_BASE64, FIREFLY_KEYSTORE_PASSWORD, FIREFLY_KEY_ALIAS,
-# FIREFLY_KEY_PASSWORD (see docs/RELEASE.md).
+#
+# Repository secrets (Settings > Secrets and variables > Actions), see docs/RELEASE.md:
+#   FIREFLY_KEYSTORE_BASE64    base64 of firefly-release.jks
+#   FIREFLY_KEYSTORE_PASSWORD
+#   FIREFLY_KEY_ALIAS          firefly
+#   FIREFLY_KEY_PASSWORD
 
 on:
   push:
@@ -17,21 +21,21 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
       - name: Set up Python 3.13 (Chaquopy builds with it)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
@@ -84,15 +88,16 @@ jobs:
           echo "path=$OUT" >> "$GITHUB_OUTPUT"
 
       - name: Keep the APK as a build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.apk.outputs.path }}
           path: ${{ steps.apk.outputs.path }}
 
       - name: Publish the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ steps.apk.outputs.path }}
           draft: false
-          prerelease: false
+          # A tag with a suffix (v0.5.0-beta.1) is a pre-release: it doesn't become "latest".
+          prerelease: ${{ contains(github.ref_name, '-') }}

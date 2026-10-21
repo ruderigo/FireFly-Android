@@ -212,7 +212,8 @@ private fun MessageRow(m: JSONObject) {
 
 /** Long-press on a person: delete (they can come back) or block (they can't, until unblocked). */
 @Composable
-private fun PersonActions(name: String, onDismiss: () -> Unit, onDelete: () -> Unit, onBlock: () -> Unit) {
+fun PersonActions(name: String, onDismiss: () -> Unit, onDelete: () -> Unit, onBlock: () -> Unit,
+                  deleteText: String? = null, blockText: String? = null) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss, containerColor = Amber.Panel, shape = Large,
         title = { Text(name, style = MaterialTheme.typography.titleMedium) },
@@ -220,11 +221,11 @@ private fun PersonActions(name: String, onDismiss: () -> Unit, onDelete: () -> U
             Column {
                 Column(Modifier.fillMaxWidth().clip(Small).clickable(onClick = onDelete).padding(vertical = 8.dp)) {
                     Text(stringResource(R.string.delete), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Error))
-                    Text(stringResource(R.string.delete_person_text), style = MaterialTheme.typography.bodySmall)
+                    Text(deleteText ?: stringResource(R.string.delete_person_text), style = MaterialTheme.typography.bodySmall)
                 }
                 Column(Modifier.fillMaxWidth().clip(Small).clickable(onClick = onBlock).padding(vertical = 8.dp)) {
                     Text(stringResource(R.string.block), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Error))
-                    Text(stringResource(R.string.block_person_text), style = MaterialTheme.typography.bodySmall)
+                    Text(blockText ?: stringResource(R.string.block_person_text), style = MaterialTheme.typography.bodySmall)
                 }
             }
         },
