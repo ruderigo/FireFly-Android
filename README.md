@@ -5,6 +5,10 @@ It speaks standard **LXMF** (so it talks to Sideband, NomadNet, MeshChat and
 FireFly handhelds) and understands **Stump nodes**: rooms, DMs, `/auth`,
 over the mesh *and* over the node's Wi-Fi, with one identity.
 
+<p align="center">
+  <img src="adrddemo.gif" alt="Android Demo" width="300" />
+</p>
+
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
