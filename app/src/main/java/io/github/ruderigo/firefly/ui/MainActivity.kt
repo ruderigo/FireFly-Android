@@ -1,5 +1,10 @@
 package io.github.ruderigo.firefly.ui
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.platform.LocalContext
 import android.Manifest
 import android.content.Intent
@@ -112,6 +117,21 @@ fun App() {
     }
 
     val state by Engine.state.collectAsState()
+    // The phone joined (or changed) a Wi-Fi: once it has been the same for 3 s, look for our
+    // Stumps on it (STUMP?), so a Stump known over LoRa gets its Wi-Fi side (billboard, files)
+    // without a search. A change within the 3 s starts the wait again.
+    val running = state is Engine.State.Running
+    LaunchedEffect(running) {
+        if (!running) return@LaunchedEffect
+        kotlinx.coroutines.flow.combine(io.github.ruderigo.firefly.net.WifiHttp.local,
+            io.github.ruderigo.firefly.net.WifiHttp.gateway) { l, g -> l to g }
+            .distinctUntilChanged()
+            .collectLatest { (local, _) ->
+                if (local == null) return@collectLatest          // off Wi-Fi: nothing to look for
+                delay(3000)
+                withContext(Dispatchers.IO) { Engine.call("stump_refresh_wifi", true) }
+            }
+    }
     Box(Modifier.fillMaxSize().background(Amber.Background)) {
         when (val s = state) {
             is Engine.State.Failed -> Empty(stringResource(R.string.engine_failed, s.error))

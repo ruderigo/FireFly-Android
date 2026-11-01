@@ -59,6 +59,7 @@ class RadioManager:
         # a whole pass of the radio loop that started after it has finished. For the screen:
         # the buttons wait, and the LoRa light flashes.
         self.busy = False
+        self.confirmed = None              # what the RNode itself reported when it came online
         self.wake = threading.Event()
         self.lock = threading.Lock()
         self.running = False
@@ -94,6 +95,11 @@ class RadioManager:
                "kind": _kind(st.port), "since": st.since, "device": self.device_name(st.port),
                "busy": bool(self.busy)}
         i = self.iface
+        # Confirmed: the RNode's own report of its frequency, now, equals what it was set to.
+        conf, active = self.confirmed, self.active_params
+        out["confirmed"] = bool(i is not None and conf and active and i.r_frequency is not None
+                                and abs(int(i.r_frequency) - active[0]) <= 100)
+        out["confirmed_at"] = conf["at"] if conf else None
         if i is not None:
             out.update({
                 "rssi": i.r_stat_rssi, "snr": i.r_stat_snr, "noise_floor": i.r_noise_floor,
@@ -250,6 +256,17 @@ class RadioManager:
         too_old = iface is not None and iface.detected and iface.firmware_too_old
 
         if iface is not None and iface.online and not too_old:
+            # Reticulum's driver calls the radio set up without the RNode confirming the
+            # frequency (it skips that check while no report has come back). Here it must:
+            # the RNode's own report of each setting, equal to what we asked, or no "online".
+            problem = self._confirm(iface, params)
+            if problem:
+                RNS.log(f"RNode on {port} not confirmed: {problem}", RNS.LOG_ERROR)
+                self.status.set(RadioStatus.REFUSED, port=port, board=board, detail=problem)
+                self.refusals[port] = (problem, board)
+                self.backoff[port] = time.time() + RETRY_REFUSED_S
+                _quiet_detach(iface)
+                return False
             try:
                 self.core.reticulum._add_interface(iface)
             except Exception as e:
@@ -259,6 +276,8 @@ class RadioManager:
             with self.lock:
                 self.iface = iface
                 self.active_params = params
+                self.confirmed = {"frequency": int(iface.r_frequency), "bandwidth": int(iface.r_bandwidth),
+                                  "sf": int(iface.r_sf), "txpower": int(iface.r_txpower), "at": time.time()}
             self.backoff.pop(port, None)
             self.refusals.pop(port, None)
             self.status.set(RadioStatus.ONLINE, port=port, board=board)
@@ -279,8 +298,15 @@ class RadioManager:
                 why = (f"firmware {iface.maj_version}.{iface.min_version} is too old "
                        f"(needs {iface.REQUIRED_FW_VER_MAJ}.{iface.REQUIRED_FW_VER_MIN}+): update it with rnodeconf")
             else:
-                why = ("it refused these radio settings. Check the frequency is in this board's band, "
-                       "and the TX power is within its limit")
+                # What the RNode itself reports, when that's what's wrong (it stayed on another
+                # frequency): said as such. Otherwise the settings were out of its range.
+                rf, freq = iface.r_frequency, params[0]
+                if rf is not None and abs(int(rf) - freq) > 100:
+                    why = (f"the RNode reports {int(rf) / 1e6:.3f} MHz, not the {freq / 1e6:.3f} MHz asked: "
+                           "it didn't change. Check the frequency is in this board's band, or restart the RNode")
+                else:
+                    why = ("it refused these radio settings. Check the frequency is in this board's band, "
+                           "and the TX power is within its limit")
             self.status.set(RadioStatus.REFUSED, port=port, board=board, detail=why)
             self.refusals[port] = (why, board)
             self.backoff[port] = time.time() + RETRY_REFUSED_S
@@ -292,9 +318,47 @@ class RadioManager:
             _quiet_detach(iface)
         return False
 
+    CONFIRM_WAIT_S = {"ble": 4.0, "usb": 2.0}
+
+    def _confirm(self, iface, params):
+        """Wait for the RNode to report back the settings it now runs with, and compare them
+        with what we asked. -> None when they match, else why not (in words)."""
+        freq, bw, txp, sf, cr = params
+        wait = self.CONFIRM_WAIT_S["ble" if (iface.port or "").startswith(BLE_PREFIX) else "usb"]
+        asked_again = False
+        end = time.time() + wait
+        while True:
+            rf = iface.r_frequency
+            if rf is not None and abs(int(rf) - freq) <= 100 and iface.r_bandwidth == bw and iface.r_sf == sf:
+                break
+            if time.time() >= end:
+                if rf is None and not asked_again:
+                    # No report yet: set it once more (the RNode answers a setting with its value).
+                    asked_again = True
+                    try:
+                        iface.setFrequency()
+                    except Exception:
+                        pass
+                    end = time.time() + wait
+                    continue
+                break
+            time.sleep(0.1)
+        rf = iface.r_frequency
+        if rf is None:
+            return (f"the RNode never confirmed the frequency ({freq / 1e6:.3f} MHz was asked): "
+                    "it may not have changed. Search again, or restart the RNode")
+        if abs(int(rf) - freq) > 100:
+            return f"the RNode reports {int(rf) / 1e6:.3f} MHz, not the {freq / 1e6:.3f} MHz asked: it didn't change"
+        if iface.r_bandwidth != bw:
+            return f"the RNode reports {iface.r_bandwidth} Hz bandwidth, not {bw}"
+        if iface.r_sf != sf:
+            return f"the RNode reports SF{iface.r_sf}, not SF{sf}"
+        return None
+
     def _detach(self):
         with self.lock:
             iface, self.iface, self.active_params = self.iface, None, None
+            self.confirmed = None
         if iface is None:
             return
         try:

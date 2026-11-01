@@ -67,6 +67,29 @@ fun SettingsScreen() {
     fun commitSettings(patch: JSONObject, okText: String = ctx.getString(R.string.settings_saved)) =
         commit(okText, "settings_set", patch.toString())
 
+    // A new radio channel is "done" only when the RNode itself reports it: saved, then
+    // "retuning…", then the RNode's answer (confirmed, what it reports instead, or none).
+    var retuneTo by remember { mutableStateOf<Long?>(null) }          // the frequency asked (Hz)
+    LaunchedEffect(retuneTo) {
+        val want = retuneTo ?: return@LaunchedEffect
+        val started = System.currentTimeMillis() / 1000.0
+        val end = System.currentTimeMillis() + 45_000
+        while (System.currentTimeMillis() < end) {
+            delay(500)
+            val r = Engine.status.value.optJSONObject("radio") ?: continue
+            val st = r.optString("state")
+            val fresh = r.optDouble("since", 0.0) >= started - 1          // happened after this save
+            if (st == "connecting" || r.optBoolean("busy")) continue
+            if (st == "online" && r.optBoolean("confirmed") && Math.abs(r.optLong("frequency") - want) <= 100) {
+                show(ctx.getString(R.string.radio_confirmed, "%.3f".format(want / 1e6)), ok = true); retuneTo = null; return@LaunchedEffect
+            }
+            if (st == "refused" && fresh) { show(r.optString("detail"), ok = false); retuneTo = null; return@LaunchedEffect }
+            if (st in listOf("off", "no devices")) { show(ctx.getString(R.string.radio_saved_no_rnode), ok = true); retuneTo = null; return@LaunchedEffect }
+        }
+        show(ctx.getString(R.string.radio_not_confirmed), ok = false)
+        retuneTo = null
+    }
+
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) scope.launch(Dispatchers.IO) {
             val key: ByteArray? = Engine.callBytes("identity_export")
@@ -157,7 +180,8 @@ fun SettingsScreen() {
                     commitSettings(JSONObject().put("radio", JSONObject()
                         .put("frequency", Math.round((f ?: 915.0) * 1e6)).put("bandwidth", bw)
                         .put("spreading_factor", sf.toInt()).put("coding_rate", cr.toInt()).put("tx_power", txp.toInt())),
-                        ctx.getString(R.string.settings_saved_radio))
+                        ctx.getString(R.string.radio_retuning))
+                    retuneTo = Math.round((f ?: 915.0) * 1e6)
                 }
             }
 
@@ -303,7 +327,7 @@ fun SettingsScreen() {
         }
 
         // The confirmation: same place, same look, for every change.
-        LaunchedEffect(bannerId) { if (banner != null) { delay(2500); banner = null } }
+        LaunchedEffect(bannerId) { if (banner != null) { delay(if (retuneTo != null) 45_000 else 3500); banner = null } }
         AnimatedVisibility(visible = banner != null, enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp)) {
             val (text, ok) = banner ?: ("" to true)
@@ -348,7 +372,8 @@ private fun OnAir(status: JSONObject) {
             val same = r.optLong("frequency") == want.optLong("frequency") && r.optInt("bandwidth") == want.optInt("bandwidth") &&
                 r.optInt("sf") == want.optInt("spreading_factor") && r.optInt("cr") == want.optInt("coding_rate") &&
                 r.optInt("txpower") == want.optInt("tx_power")
-            if (same) stringResource(R.string.on_air, air) to Amber.Ember
+            if (same && r.optBoolean("confirmed")) stringResource(R.string.on_air_confirmed, air) to Amber.Ember
+            else if (same) stringResource(R.string.on_air, air) to Amber.Ember
             else stringResource(R.string.on_air_applying, air) to Amber.Muted
         }
         state == "connecting" -> stringResource(R.string.radio_applying) to Amber.Muted

@@ -70,8 +70,10 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                     KeyValue(stringResource(R.string.link), when (r.optString("kind")) {
                         "ble" -> "Bluetooth LE"; "usb" -> "USB"; else -> "Wi-Fi" })
                     KeyValue(stringResource(R.string.board), r.optString("board"))
+                    // The RNode's own report of what it runs with; ✓ when it matches what it was set to.
                     KeyValue(stringResource(R.string.channel), "%.3f MHz  %d kHz  SF%d  4/%d  %d dBm".format(
-                        r.optDouble("frequency", 0.0) / 1e6, r.optInt("bandwidth") / 1000, r.optInt("sf"), r.optInt("cr"), r.optInt("txpower")))
+                        r.optDouble("frequency", 0.0) / 1e6, r.optInt("bandwidth") / 1000, r.optInt("sf"), r.optInt("cr"), r.optInt("txpower")) +
+                        if (r.optBoolean("confirmed")) "  ✓" else "  " + stringResource(R.string.not_confirmed))
                     if (!r.isNull("rssi")) KeyValue(stringResource(R.string.last_packet), "%d dBm  SNR %.1f dB".format(r.optInt("rssi"), r.optDouble("snr")))
                     if (!r.isNull("noise_floor")) KeyValue(stringResource(R.string.noise_floor), "${r.optInt("noise_floor")} dBm")
                     KeyValue(stringResource(R.string.channel_load), "%.1f %%  airtime %.1f %%".format(r.optDouble("channel_load", 0.0), r.optDouble("airtime", 0.0)))

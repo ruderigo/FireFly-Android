@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original FireFly icon (MIT). Outline: nothing new; filled: something new. Tinted in code. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M3,7a2,2 0 0 1 2,-2h4.2l2,2H19a2,2 0 0 1 2,2v8a2,2 0 0 1 -2,2H5a2,2 0 0 1 -2,-2zM3,9.1h18v1.4H3z" android:fillColor="#FFFFFFFF" android:fillType="evenOdd"/>
+</vector>

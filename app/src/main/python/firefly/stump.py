@@ -40,8 +40,10 @@ class BeaconHandler:
 
     def received_announce(self, destination_hash, announced_identity, app_data):
         info = parse_beacon(app_data)
+        if info and not beacon_is_own(info[0], announced_identity):
+            return              # a beacon naming someone else's LXMF address: forged (Stump 1.0.0-beta.37)
         if info:
-            self.on_stump(*info, beacon_http(app_data))
+            self.on_stump(*info, beacon_http(app_data), boot=beacon_boot(app_data))
 
 
 # Rooms renamed in Stump 1.0.0-beta.4: #lxmf is #lora-mesh (LoRa phones and handhelds
@@ -59,6 +61,14 @@ def canonical_room(room):
 
 def same_room(a, b):
     return canonical_room(a) == canonical_room(b)
+
+
+def beacon_is_own(lxmf_hex, identity):
+    """A stump.node beacon must name its own identity's LXMF address."""
+    try:
+        return identity is not None and RNS.Destination.hash(identity, "lxmf", "delivery").hex() == lxmf_hex
+    except Exception:
+        return False
 
 
 def parse_beacon(app_data):
@@ -86,6 +96,24 @@ def beacon_http(app_data):
         return []
 
 
+def beacon_caps(app_data):
+    """The beacon's sixth item: the Stump's caps dict ({} when absent or not a dict). Unknown
+    keys are kept and ignored: each Stump release may add some."""
+    try:
+        data = msgpack.unpackb(app_data)
+        c = data[5] if isinstance(data, list) and len(data) > 5 else None
+        return c if isinstance(c, dict) else {}
+    except Exception:
+        return {}
+
+
+def beacon_boot(app_data):
+    """caps["b"] since Stump 1.0.0-beta.43: an id for this boot, new at every restart.
+    None on older Stumps (or anything that isn't a short string)."""
+    b = beacon_caps(app_data).get("b")
+    return b if isinstance(b, str) and 0 < len(b) <= 32 else None
+
+
 def beacon_hash_for(identity):
     """Destination hash of a peer's Stump beacon. request_path() on it to ask 'are you a Stump?'."""
     return RNS.Destination.hash(identity, BEACON_APP, BEACON_ASPECT)
@@ -107,6 +135,19 @@ AUTH_REQUIRED = (
     "identité vérifiée requise — envoie /auth pour te vérifier",
     "se requiere identidad verificada — envía /auth para verificarte",
 )
+
+
+# Stump 1.0.0-beta.38: its LoRa radio (or one along the chain) is down. A line for LoRa is
+# kept and goes out when it's back: "⧗ — the radio has been down for N min: your message will
+# go out when it's back (kept up to an hour)". Not a refusal. In the person's language.
+LORA_DOWN_MARKERS = ("radio has been down", "la radio est coupée", "la radio lleva")
+
+# The billboard over LoRa (Stump 1.0.0-beta.38): /board, /board <id>, /post <title> | <body>.
+BOARD_LINE = re.compile(r"^#(\d{6,}(?:\.\d+)?) (.*)$")
+POST_OK = re.compile("^\u2713 #(\\d{6,})")
+BOARD_NOTHING = ("nothing on the billboard", "rien au babillard", "nada en el tablón")
+BOARD_OFF = ("no billboard on this stump", "pas de babillard sur ce stump", "no hay tablón en este stump")
+BOARD_GONE = ("no notice #", "pas d'annonce #", "no hay anuncio #")
 
 
 def parse_line(line):
@@ -141,6 +182,8 @@ def parse_line(line):
                 "tier": parts[1] if len(parts) > 1 else "", "text": line}
     if line.strip() in AUTH_REQUIRED:
         return {"kind": "needs_auth", "text": line}  # this needs a verified identity: /auth
+    if line.startswith("⧗") and any(m in line.lower() for m in LORA_DOWN_MARKERS):
+        return {"kind": "lora_waits", "text": line}     # kept: it goes out when the radio is back
     if line.startswith("⧗"):
         return {"kind": "slow", "text": line}           # slow down: voice notes, or plugin commands
     if line.startswith("⊖ "):

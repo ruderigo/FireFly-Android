@@ -30,8 +30,11 @@ def esc(data):
 
 class FakeRNodeLink:
     def __init__(self, style="usb", band=(137e6, 1020e6), fw=(1, 82), answers=True, max_txp=22,
-                 air=None, mtu=180):
+                 air=None, mtu=180, stuck_freq=None, echo_freq=True):
         self.style, self.band, self.fw, self.answers, self.max_txp = style, band, fw, answers, max_txp
+        # Misbehaving RNodes (field report, Oct 25): one that stays on a frequency whatever it's
+        # told (and says so), and one that never reports its frequency back.
+        self.stuck_freq, self.echo_freq = stuck_freq, echo_freq
         self.freq = int(band[0]); self.bw = 125000; self.txp = 0; self.sf = 7; self.cr = 5; self.state = 0
         self.mtu = mtu
         self.rx = bytearray()          # device -> host
@@ -128,8 +131,11 @@ class FakeRNodeLink:
             f = int.from_bytes(data, "big")
             if self.band[0] <= f <= self.band[1]:
                 self.freq = f
+            if self.stuck_freq:
+                self.freq = int(self.stuck_freq)
             self.set_log.append(("freq", f))
-            self._send(CMD["FREQ"], self.freq.to_bytes(4, "big"))
+            if self.echo_freq:
+                self._send(CMD["FREQ"], self.freq.to_bytes(4, "big"))
         elif cmd == CMD["BW"] and len(data) == 4:
             self.bw = int.from_bytes(data, "big"); self._send(CMD["BW"], data)
         elif cmd == CMD["TXP"] and len(data) == 1:

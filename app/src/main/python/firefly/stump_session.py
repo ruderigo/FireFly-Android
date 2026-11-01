@@ -440,6 +440,7 @@ class StumpSession:
         self.last_move_at = 0.0             # when the node last told us "→ #room"
         self.move_join_pending = False      # that move's own "✓ me" hasn't arrived yet
         self.join_target, self.join_at = None, 0.0
+        self.rooms_asked_at = 0.0           # /rooms sent, its answer not in yet (for "refreshing…")
         self.seen_remote = set()            # HTTP message ids already stored (dedupe)
         if carry:                           # the same Stump at a new address: what we already have
             self.seen_remote |= set(carry.get("seen") or ())
@@ -460,7 +461,19 @@ class StumpSession:
         self.greeted_at = 0.0
         self.greeting_nick = None           # the /nick line we sent as part of the greeting
         self.hello_v2 = False               # this Stump speaks /hello (beta.32)
+        # The billboard over LoRa (Stump 1.0.0-beta.38): asked with /board, read from its answer.
+        self.board_lora = {"state": "idle", "q": "", "posts": [], "items": {}, "at": 0.0,
+                           "item": None, "post": {"state": "idle"}}
+        # What we asked and haven't had an answer to: answers over LoRa can come late and in
+        # any order, so each is recognised by its shape, not by being the last thing asked.
+        self.board_asked = {"list": None, "items": {}, "post": None}     # (arg, when) / {id: when}
+        self.bots = set()                   # nicks whose lines are a bot's ("bot": true, beta.36): no DMs to them
         self.auth_quiet, self.auth_before = False, None
+        # Entering a Stump waits for this (the "verifying…" popup): FireFly proves who it is to
+        # every Stump, over Wi-Fi (/hello or /auth) and LoRa (/auth), before the room opens.
+        # "idle", "verifying", "ok", "not_needed" (a Stump without /auth), "failed" (+ detail).
+        # This run only: a Stump forgets the link after a reboot, so each run proves it again.
+        self.verify = {"state": "idle", "detail": "", "at": 0.0}
         self.folded = set()                 # "renamed" pairs already applied
         self.offline_reason = None          # why the last Wi-Fi poll got nothing ("connection refused"…)
         self.hw = None                      # the node's radio state from the poll (Stump 1.0.0-beta.5+)
@@ -541,6 +554,17 @@ class StumpSession:
             self._note_join(f"/join {room}")
             self.pipe.send(f"/join {room}")
 
+    def busy_state(self):
+        """For the room's buttons: {"joining": the room a /join is on its way to, or None,
+        "refreshing": a /rooms not answered yet}. Over LoRa answers take longer."""
+        now = time.time()
+        wait = 90 if self.pipe.kind == MESH else 10
+        joining = None
+        if self.join_target and now - self.join_at < min(JOIN_WINDOW_S, wait) and \
+                not stump.same_room(self.join_target, self.room or ""):
+            joining = self.join_target
+        return {"joining": joining, "refreshing": bool(self.rooms_asked_at and now - self.rooms_asked_at < wait)}
+
     def _note_join(self, line):
         parts = line.split()
         if parts and parts[0].lower() in ("/join", "/j") and len(parts) > 1:
@@ -569,8 +593,118 @@ class StumpSession:
 
     def command(self, line):
         self._note_join(line)
+        if line.strip().lower() == "/rooms":
+            self.rooms_asked_at = time.time()
         self.last_command_at = time.time()
         self.pipe.send(line, control=line.startswith("/auth"))
+
+    BOARD_WAIT_S = 120                  # after this, the tab says "no answer yet" (it's still taken)
+    BOARD_KEEP_S = 30 * 60              # an answer this late is still recognised (LoRa, a long post)
+
+    @property
+    def board_pending(self):
+        """The oldest request still waiting, for the tab: ("list" | "item" | "post", arg, when) or None."""
+        a = self.board_asked
+        waiting = ([("list", a["list"][0], a["list"][1])] if a["list"] else []) + \
+                  [("item", pid, t) for pid, t in a["items"].items()] + \
+                  ([("post", a["post"][0], a["post"][1])] if a["post"] else [])
+        return min(waiting, key=lambda w: w[2]) if waiting else None
+
+    def board_request(self, q=""):
+        """/board [words]: the newest notices (at most 5), their titles."""
+        q = " ".join(str(q or "").split())
+        with self.lock:
+            self.board_asked["list"] = (q, time.time())
+            self.board_lora.update(state="waiting", q=q, at=time.time())
+        self.pipe.send(f"/board {q}".rstrip())
+        self.core.emit({"type": "changed"})
+
+    def board_item(self, pid):
+        """/board <id>: one notice, its title and body."""
+        pid = str(pid).lstrip("#")
+        with self.lock:
+            self.board_asked["items"][pid] = time.time()
+            self.board_lora["item"] = pid
+        self.pipe.send(f"/board {pid}")
+        self.core.emit({"type": "changed"})
+
+    def board_post(self, title, body=""):
+        """/post <title> | <body>: title 80, body 600 (its line breaks kept)."""
+        title = " ".join(str(title or "").split())[:80]
+        body = str(body or "").strip()[:600]
+        if not title:
+            return False
+        with self.lock:
+            self.board_asked["post"] = (title, time.time())
+            self.board_lora["post"] = {"state": "waiting", "title": title}
+        self.pipe.send(f"/post {title} | {body}" if body else f"/post {title}")
+        self.core.emit({"type": "changed"})
+        return True
+
+    def _board_answer(self, content):
+        """An LXMF batch that answers one of our /board or /post requests, whichever and however
+        late (within BOARD_KEEP_S): consumed, not a room line. -> True if it was one."""
+        now = time.time()
+        a = self.board_asked
+        if a["list"] and now - a["list"][1] > self.BOARD_KEEP_S:
+            a["list"] = None
+        if a["post"] and now - a["post"][1] > self.BOARD_KEEP_S:
+            a["post"] = None
+        for pid in [p for p, t in a["items"].items() if now - t > self.BOARD_KEEP_S]:
+            del a["items"][pid]
+        if not (a["list"] or a["items"] or a["post"]):
+            return False
+        lines = str(content or "").split("\n")
+        nonblank = [l.strip() for l in lines if l.strip()]
+        if not nonblank:
+            return False
+        first, low = nonblank[0], nonblank[0].lower()
+        b = self.board_lora
+        m = stump.BOARD_LINE.match(first)
+
+        def item_for(found):
+            return next((p for p in a["items"] if p.startswith(found) or found.startswith(p)), None)
+
+        done = False
+        if a["post"] and stump.POST_OK.match(first):                       # "✓ #id": our post is in
+            b["post"] = {"state": "ok", "id": stump.POST_OK.match(first).group(1), "title": a["post"][0]}
+            a["post"] = None
+            done = True
+        elif a["list"] and all(stump.BOARD_LINE.match(l) for l in nonblank) and \
+                (len(nonblank) > 1 or not item_for(m.group(1))):            # the titles (every line one)
+            b.update(state="ok", posts=[{"id": x.group(1), "title": x.group(2)}
+                                        for x in (stump.BOARD_LINE.match(l) for l in nonblank)], at=now)
+            a["list"] = None
+            done = True
+        elif m and item_for(m.group(1)):                                  # "#id title" + its text
+            pid = item_for(m.group(1))
+            start = next(i for i, l in enumerate(lines) if l.strip())
+            b["items"][pid] = {"id": pid, "title": m.group(2), "body": "\n".join(lines[start + 1:]).strip()}
+            del a["items"][pid]
+            done = True
+        elif any(x in low for x in stump.BOARD_GONE) and any(p in first for p in a["items"]):
+            pid = next(p for p in a["items"] if p in first)
+            b["items"][pid] = {"id": pid, "gone": True}
+            del a["items"][pid]
+            done = True
+        elif any(x in low for x in stump.BOARD_OFF):
+            b.update(state="off", posts=[], at=now)
+            a.update(list=None, post=None, items={})
+            done = True
+        elif a["list"] and any(x in low for x in stump.BOARD_NOTHING):
+            b.update(state="empty", posts=[], at=now)
+            a["list"] = None
+            done = True
+        elif a["post"] and len(nonblank) == 1 and not m and \
+                not first.startswith(("<", "[DM]", "*", "✓ ", "✗ ", "→ ", "✎ ", "=", "?", "⊖", "⊘")):
+            b["post"] = {"state": "refused", "message": first, "title": a["post"][0]}  # why it wasn't posted
+            a["post"] = None
+            done = True
+        if done:
+            if b.get("state") == "waiting" and not a["list"]:
+                b["state"] = "ok" if b.get("posts") else b.get("state")
+            self.core.emit({"type": "changed"})
+        return done
 
     def send_dm(self, nick, text):
         nick, text = nick.strip().lstrip("~"), text.strip()
@@ -604,6 +738,7 @@ class StumpSession:
         if self.pipe.kind == MESH and not self.core.can_reach(self.pipe.address):
             # No radio and no other way to this Stump: the challenge could never arrive.
             self._save(auth="failed", auth_detail="no radio, and no other way to reach this Stump")
+            self._verify_set("failed", "no radio, and no other way to reach this Stump")
             return False
         with self.lock:
             if self.auth and self.auth.busy and time.time() - self.auth.started < stump.AUTH_WINDOW_S + 30:
@@ -613,8 +748,39 @@ class StumpSession:
             self.auth_before = (self.store.stump_node(self.key) or {}).get("auth")
             line = self.auth.start()
         self._save(auth="waiting", auth_detail="")
+        self._verify_set("verifying")
         self.pipe.send(line, control=True)
         return True
+
+    def _verify_set(self, state, detail=""):
+        self.verify = {"state": state, "detail": detail or "", "at": time.time()}
+
+    def verify_now(self, again=False):
+        """Entering this Stump: prove who we are unless it's done (or on its way). `again`:
+        after a failure (Try again). -> the verify state."""
+        st = self.verify["state"]
+        if st in ("ok", "not_needed"):
+            return dict(self.verify)
+        if st == "verifying" and time.time() - self.verify["at"] < stump.AUTH_WINDOW_S + 40:
+            return dict(self.verify)
+        if st == "failed" and not again:     # entering (or Try again) asks anew; a poll only reads
+            return dict(self.verify)
+        if self.auth and self.auth.busy:
+            self.auth = None                    # a stale one: start over with a fresh challenge
+        self._verify_set("verifying")
+        self.greet(force=True)
+        return dict(self.verify)
+
+    def peer_restarted(self):
+        """The Stump restarted (a new boot id in its beacon): it no longer knows we proved who we
+        are. Not "verified" any more; and if we had verified this run (the Stump is in use),
+        verify again now, quietly."""
+        was = self.verify["state"]
+        self.auth = None
+        self._save(auth="none", auth_detail="")
+        self._verify_set("idle")
+        if was == "ok":
+            self.verify_now()
 
     def hello_needed(self):
         """The Stump asks for the greeting (a poll or a send said "hello": "required")."""
@@ -653,6 +819,7 @@ class StumpSession:
         threading.Thread(target=self._hello_exchange, daemon=True, name="stump-hello").start()
 
     def _hello_exchange(self):
+        self._verify_set("verifying")
         name = stump.clean_nick(self.core.settings["display_name"])
         prefer = self.core.settings.get("stump_prefer", "wifi")
         known = (self.store.stump_node(self.key) or {}).get("lxmf")
@@ -671,6 +838,7 @@ class StumpSession:
                 self._save(auth="ok", auth_detail=self.core.identity.hash.hex(),
                            **({"nick": self.nick} if self.nick else {}))
             self._hello_done()
+            self._verify_set("ok")
             if outcome == "name":               # greeted, but under another name: say why
                 self.store.add_line(self.key, self.room, "reply", str(a.get("message") or
                                     f"the name {name} is someone else's on this Stump: choose another in Settings"))
@@ -680,13 +848,18 @@ class StumpSession:
         elif outcome == "forged":
             self._save(auth="failed", auth_detail="this Stump's signature doesn't check out: "
                                                   "it isn't the Stump it claims to be, so FireFly didn't introduce itself")
+            self._verify_set("failed", "this Stump's signature doesn't check out: it isn't the Stump it claims to be")
         elif outcome == "other":
             self._save(auth="none", auth_detail="")
+            self._verify_set("failed", "another Stump answers at this address now: looking for this one")
             self.set_online(False, f"another Stump answers at this address now ({(a or {}).get('stump') or 'unknown'})")
             threading.Thread(target=self.relocate, daemon=True).start()     # find ours by its identity
         elif outcome == "refused":
-            self._save(auth="failed", auth_detail=str((a or {}).get("message") or "the Stump refused FireFly's signature"))
-        # "unreachable": the poll says so, and the next "required" greets again
+            why = str((a or {}).get("message") or "the Stump refused FireFly's signature")
+            self._save(auth="failed", auth_detail=why)
+            self._verify_set("failed", why)
+        else:   # "unreachable": the poll says so too, and the next "required" greets again
+            self._verify_set("failed", self.offline_reason or "the Stump didn't answer")
 
     def _greeting_nick(self):
         """After AUTH-OK in a greeting: our name, unless the Stump already has it (from LoRa)."""
@@ -724,6 +897,7 @@ class StumpSession:
         with self.lock:
             if self.auth and self.auth.busy and time.time() - self.auth.started > stump.AUTH_WINDOW_S + 30:
                 self.auth = None
+                self._verify_set("failed", "no answer from the Stump" + (" over LoRa" if self.pipe.kind == MESH else ""))
                 if self.auth_quiet:             # our own try on connecting: no news is no failure
                     self._save(auth=self.auth_before or "none", auth_detail="")
                 else:
@@ -757,6 +931,8 @@ class StumpSession:
             self.batch_room = None
 
     def _handle_batch(self, content, audio):
+        if self.batch_room is None and audio is None and self._board_answer(content):
+            return                          # the answer to our /board or /post
         for parsed in stump.parse_message(content):
             if parsed["kind"] == "dm":
                 self._handle_dm(parsed["author"], parsed["text"], audio=audio)
@@ -812,6 +988,8 @@ class StumpSession:
             if (self.store.stump_node(self.key) or {}).get("auth") != "waiting":
                 self.start_auth(quiet=True)
         for m in data.get("messages") or []:
+            if m.get("bot") and m.get("nick"):
+                self.bots.add(str(m["nick"]))       # a bot's lines (beta.36): not a DM contact
             if m.get("id") in self.seen_remote:
                 continue
             self.seen_remote.add(m.get("id"))
@@ -884,6 +1062,7 @@ class StumpSession:
         if unsent and sent and sent.lower().startswith("/auth"):
             self.auth = None
             self._save(auth="failed", auth_detail=text)
+            self._verify_set("failed", text)
             return
         if unsent and sent and not sent.startswith(("/", "!")):
             line_id = self.store.add_line(self.key, self.room, "msg", sent, nick=self.my_nick(), mine=True)
@@ -914,10 +1093,15 @@ class StumpSession:
         if k == "unknown_command":
             if self.auth_quiet and self.auth and self.auth.busy and "/auth" in p["text"]:
                 self.auth = None                # a node without /auth: nothing to prove there
+                self._verify_set("not_needed")
                 return self._save(auth=self.auth_before or "none", auth_detail="")
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "needs_auth":                         # not "auth_…": those are the /auth tokens
             return self._needs_auth(p["text"])
+        if k == "lora_waits":
+            # The Stump's radio is down: our line is kept and goes out when it's back. Say so; it
+            # wasn't refused (no "not sent").
+            return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "slow":
             # ⧗ is the node saying "slow down": lines too fast (3 at once, then one every 2 s),
             # too many voice notes, plugin commands or wrong passwords. It names nothing: it
@@ -941,6 +1125,7 @@ class StumpSession:
             self._set_room(p["room"])
             return self.store.add_line(self.key, self.room, "system", f"→ #{self.room}")
         if k == "room":
+            self.rooms_asked_at = 0.0           # its answer is in
             node = self.store.stump_node(self.key) or {}
             rooms = {r["name"]: r for r in node.get("rooms", [])}
             rooms[p["room"]] = {"name": p["room"], "count": p["count"], "tier": p["tier"], "topic": p["topic"]}
@@ -1143,11 +1328,13 @@ class StumpSession:
             self.pipe.send(reply, control=True)
         if sess.state == stump.AuthSession.OK:
             self._save(auth="ok", auth_detail=sess.identity_hash or "")
+            self._verify_set("ok")
             if self.hello == "required":
                 self._greeting_nick()           # the second half of the greeting
             if not self.auth_quiet:
                 self.store.add_line(self.key, self.room, "reply", "AUTH-OK " + (sess.identity_hash or ""))
         elif sess.state == stump.AuthSession.FAILED:
+            self._verify_set("failed", sess.reason or "the Stump refused FireFly's signature")
             if self.auth_quiet:
                 self._save(auth=self.auth_before or "none", auth_detail="")
             else:

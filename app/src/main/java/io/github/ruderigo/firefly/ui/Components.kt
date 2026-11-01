@@ -252,3 +252,20 @@ fun OverflowMenu(items: List<Pair<String, () -> Unit>>) {
         }
     }
 }
+
+/**
+ * [value], once it has held for [delayFor] of it (ms): a reachability that flips for one
+ * missed poll doesn't make buttons blink. Something becoming available can be quick, and
+ * going away slower.
+ */
+@Composable
+fun <T> settled(value: T, delayFor: (T) -> Long): T {
+    var shown by remember { mutableStateOf(value) }
+    LaunchedEffect(value) {
+        if (value != shown) {
+            kotlinx.coroutines.delay(delayFor(value))
+            shown = value
+        }
+    }
+    return shown
+}

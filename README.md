@@ -12,11 +12,163 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.5.0: one person on a Stump, over LoRa and Wi-Fi** (for Stump 1.0.0-beta.33). Built and field-tested: BLE and USB
+Status: **0.5.1: verified on every Stump, the billboard over LoRa** (for Stump 1.0.0-beta.43). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.5.1: verified on every Stump, the billboard over LoRa
+Everything from the nine betas below, in short:
+- **Verified before you go in:** opening a Stump waits behind "Verifying
+  you with <Stump>…" until it has FireFly's signature, over Wi-Fi
+  (`/hello`) and now over LoRa too (`/auth`, sent by itself); a failure
+  says why, with Try again, Go in anyway and Back. A Stump that restarts
+  (its boot id, Stump 1.0.0-beta.43) is verified again by itself.
+- **The billboard over LoRa:** read the newest notices, open one, post one
+  (`/board`, `/post`, Stump 1.0.0-beta.38); answers stay in the Board tab,
+  in any order, even late.
+- **A new Stump screen:** the room on the left half, `#room (topic)`
+  scrolling; private messages, billboard and files as icons, filled when
+  something's new; what isn't available here is dimmed and says why
+  ("N/A over LoRa", "N/A without Wi-Fi", "<Stump> is offline").
+- **Stumps follow the Wi-Fi:** joining a Wi-Fi finds your Stumps on it by
+  itself; the billboard and files come from their Wi-Fi side as soon as it
+  answers. A filled stump icon for those that answer; pull down to refresh.
+- **The radio channel is confirmed by the RNode:** FireFly is online only
+  when the RNode reports the frequency, bandwidth and SF asked, and says so
+  in Settings ("The RNode confirmed 907.000 MHz") or says what it reports.
+- **No double taps:** room buttons, refresh, Use and Search now wait while
+  they're working ("joining…", "refreshing…", "Searching…").
+
+### 0.5.1-beta.9: a Stump that restarts (Stump 1.0.0-beta.43)
+- The beacon's caps carry `b`, an id for each boot. Caps keys FireFly doesn't
+  know are still ignored; a beacon without `b` (older Stumps) changes nothing.
+- A new `b` means the Stump restarted and forgot who proved who they are:
+  FireFly stops showing it as "verified" and, if you'd entered it this run,
+  verifies again by itself, quietly (no popup, no lines in the room). A
+  Stump you haven't entered is sent nothing.
+- Its chain (/chain.json) is asked again 5 s and 20 s after a restart, as
+  the Stump refills it within seconds.
+
+### 0.5.1-beta.8: verified before you go in
+- Entering a Stump now waits behind a "Verifying you with <Stump>…" popup
+  until the Stump has FireFly's signature, then the room opens by itself.
+  Over Wi-Fi that's the /hello FireFly already sends when the Stump appears
+  (a second or two); over LoRa FireFly now sends /auth itself on entering
+  (about 10 s, up to a minute and a half) — before, LoRa waited for a tap
+  on "Verify me". Quiet: no AUTH- lines in the room.
+- Already verified this run: no popup. A Stump without /auth: nothing to
+  prove, straight in. A refusal, no answer, no radio or an unreachable Stump
+  says why, with Try again, Go in anyway (reading works; writing may be
+  refused) and Back. A failure never retries on its own while the popup is
+  up. Stumps only heard over LoRa aren't sent anything (no airtime spent).
+- Tests: run_verify_gate (Wi-Fi /hello, LoRa challenge and AUTH-OK, refusal
+  and Try again, timeout, no /auth, no radio).
+
+### 0.5.1-beta.7: a frequency change is only "done" when the RNode says so
+- Reported with an RF sniffer: set to 907 MHz, the signal stayed on 915.
+  Reticulum's RNode driver calls a radio set up without the RNode
+  confirming its frequency (it skips that one check while no report has
+  come back). FireFly now waits for the RNode's own report of its
+  frequency, bandwidth and SF, and goes online only when they match what
+  was asked; it asks once more when no report comes. An RNode that stays on
+  another frequency is refused with what it reports ("the RNode reports
+  915.000 MHz, not the 907.000 MHz asked: it didn't change"); one that never
+  reports is refused too.
+- **Settings › Radio channel waits for the RNode:** "Saved · retuning the
+  RNode…", then "The RNode confirmed 907.000 MHz", or its own answer, or
+  "no RNode connected". The on-air line and the Network tab's channel say
+  "confirmed by the RNode" (✓) when the radio's report matches.
+- What FireFly can confirm is what the RNode reports; an RF sniffer remains
+  the proof on air.
+
+### 0.5.1-beta.6: LoRa billboard answers stay in the Board tab (field fix)
+- Reported: after a long post over LoRa, the answer to opening a notice
+  (`#568944` with its title and text) showed up in the room. It came back
+  after FireFly had stopped waiting (2 min), or while it waited for another
+  answer. Now each request (the list, each notice, a post) is waited for on
+  its own, and answers are recognised by their shape, in any order, up to
+  30 minutes late. "No answer yet" still shows after 2 minutes.
+- The post form shows its size on air (one packet, or several through a
+  link): a long notice takes a while over LoRa.
+- **Room buttons and refresh wait, and show it.** Tapping a room: it reads
+  `#room …` and blinks until the Stump has moved you there (or refused),
+  and the other rooms wait meanwhile. "refresh" reads "refreshing…" until
+  the Stump's room list is in. Over LoRa they wait longer (up to 90 s).
+  The billboard's and files' search doesn't start a second fetch while one
+  runs.
+
+### 0.5.1-beta.5: the billboard over LoRa (Stump 1.0.0-beta.38)
+- **A LoRa Board tab.** Over LoRa only, the billboard icon now opens: the
+  newest notices' titles (`/board`, at most 5; search with words), a
+  notice's text when you open it (`/board <id>`), and **Post over LoRa**
+  (`/post`, title 80, details 600). Each answer comes back over LoRa, so the
+  tab says when it's asking, and asks nothing twice while an answer is on
+  its way; no answer in 2 minutes says so. Files stay "N/A over LoRa".
+- **Radio down is not "not sent".** A Stump whose radio is down keeps a line
+  for LoRa and sends it when it's back, saying so with a ⧗; FireFly shows
+  that note and no longer marks the line "not sent (too fast)".
+- **Forged Stump beacons are ignored:** a `stump.node` beacon must name its
+  own identity's LXMF address.
+- **Bots aren't DM contacts:** lines marked `"bot": true` (BarKeep, the
+  plugins) leave their author out of "Message someone".
+
+### 0.5.1-beta.4: one answer for "can I reach this Stump?"
+- **The engine decides, the screen follows.** Whether a Stump's billboard
+  and files can be had, and why not, is worked out in one place for all of
+  its sides (Wi-Fi and LoRa) and the phone's Wi-Fi: reachable on the Wi-Fi;
+  **N/A over LoRa** (only LoRa reaches it: heard in the last 10 min, and the
+  radio or a path can carry); **N/A without Wi-Fi** (a Wi-Fi-only Stump, the
+  phone off Wi-Fi); **"<name> is offline"** (nothing reaches it). A Stump
+  that's simply down no longer says "N/A over LoRa".
+- **A tap checks first:** the underline goes to the icon while the Stump is
+  asked (1.5 s); then it opens, or the right note shows and it goes back to
+  the room. Taps while it's checking or showing a note are ignored.
+- **No blinking:** a change only counts once it has held (lighting up after
+  0.3 s, dimming after 1.5 s), so one missed poll doesn't flip the icons.
+- **The Stumps tab:** each Stump has a stump icon, filled when it answers
+  (on the Wi-Fi, or heard over LoRa lately) and outlined when not. **Pull
+  down to refresh:** every Stump is asked (Wi-Fi probed, LoRa asked for a
+  path, which it answers with an announce); pulling again meanwhile does
+  nothing.
+
+### 0.5.1-beta.3: the billboard and files follow the Wi-Fi
+- When the phone joins (or changes) a Wi-Fi, FireFly waits until it has
+  settled (3 s) and looks for your Stumps on it, wherever you are in the
+  app: no search needed.
+- A Stump's screen opened over LoRa takes the billboard and files from
+  the same Stump's Wi-Fi side as soon as it answers there: their icons
+  light up by themselves, and dim again ("N/A over LoRa") when it stops.
+- The other way too: a Stump opened over Wi-Fi whose Wi-Fi goes (Wi-Fi off,
+  out of range) dims its billboard and files. A tap on them checks that
+  the Stump still answers first (the underline goes there meanwhile) and,
+  if not, says "N/A over LoRa" and goes back to the room; being on the
+  billboard or files when the Wi-Fi goes does the same.
+
+### 0.5.1-beta.2: a new navigation on a Stump's screen
+- **The room on the left half; icons on the right half** for private
+  messages, the billboard and files, sharing it equally. The same layout
+  over Wi-Fi and LoRa: what the Stump doesn't offer here (the billboard and
+  files over LoRa) is dimmed and can't be opened.
+- **The room tab reads `#room (topic)`,** from the left; when it's longer
+  than its half, it scrolls by itself so it can be read through. (The
+  topic's own line above the chat is gone: it's in the tab.)
+- **A dimmed tab says why:** tapped over LoRa, the underline slides to it,
+  stays 300 ms, "N/A over LoRa" shows for 600 ms, and it slides back to the
+  room (on Wi-Fi, a Stump without a billboard or files says so instead).
+  One underline now moves between the tabs.
+- **Outline: nothing new. Filled: something new.** The envelope fills when
+  a private message is unread (no count). The billboard and files icons
+  have the same two forms, ready for "new notices" and "new files" later.
+- The icons are drawn for FireFly (`res/drawable/ic_tab_*.xml`, MIT like
+  the rest of the app); a screen reader names each tab.
+
+### 0.5.1-beta.1
+- A Stump's private messages tab is an envelope, **✉ (0)**, instead of
+  "Private (0)" (a screen reader still says "Private"); it turns pink when
+  something is unread. The tabs are spaced by need: more room for the
+  room's name, less for the envelope.
 
 ### 0.5.0: one person on a Stump, over LoRa and Wi-Fi
 Everything from the ten betas below, in short:

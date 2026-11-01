@@ -124,6 +124,44 @@ api.radio_search_now()
 check(core.radio.snapshot()["busy"] is True, "Search now: busy at once")
 wait(lambda: core.radio.snapshot()["busy"] is False, 15, "...and not once the search is done")
 
+print("-- the RNode must confirm its frequency (field report, Oct 25: set 907, still on 915)")
+api.remove_ble_device("AA:BB:CC:DD:EE:01")
+wait(lambda: core.radio.status.state != "online", 10, "the BLE RNode let go")
+usb = FakeRNodeLink(style="usb")
+links.usb["usb:/dev/bus/usb/001/005"] = usb
+core.settings.update({"radio": {"frequency": 915_000_000}})
+core.radio.search_now()
+wait(lambda: core.radio.status.state == "online", 20, "online on 915 MHz")
+snap = core.radio.snapshot()
+check(snap.get("confirmed") is True and snap["frequency"] == 915_000_000, f"confirmed by the RNode itself ({snap.get('frequency')})")
+core.settings.update({"radio": {"frequency": 907_000_000}})
+core.radio.request_apply(0.2)
+wait(lambda: core.radio.status.state == "online" and core.radio.snapshot().get("frequency") == 907_000_000, 20,
+     "retuned to 907: the RNode reports 907, confirmed")
+check(core.radio.snapshot().get("confirmed") is True, "...confirmed")
+usb.unplug()
+wait(lambda: core.radio.status.state != "online", 10, "unplugged")
+
+stuck = FakeRNodeLink(style="usb", stuck_freq=915_000_000)       # stays on 915, and says so
+links.usb["usb:/dev/bus/usb/001/005"] = stuck
+core.radio.search_now()
+wait(lambda: core.radio.status.state == "refused", 20, "an RNode stuck on 915 when 907 is asked: not online")
+d = core.radio.status.detail or ""
+check("915.000" in d and "907.000" in d, f"...and it says so: {d}")
+stuck.unplug()
+wait(lambda: core.radio.status.state != "refused" or True, 1, "")
+
+silent = FakeRNodeLink(style="usb", echo_freq=False)               # never reports its frequency
+links.usb["usb:/dev/bus/usb/001/006"] = silent
+core.radio.search_now()
+wait(lambda: core.radio.status.state == "refused" and "never confirmed" in (core.radio.status.detail or ""), 30,
+     "an RNode that never reports its frequency: not online (Reticulum alone would have said online)")
+check(silent.set_log.count(("freq", 907_000_000)) >= 2, "...after being asked twice")
+silent.unplug()
+for p in ("usb:/dev/bus/usb/001/005", "usb:/dev/bus/usb/001/006"):
+    links.usb.pop(p, None)
+core.settings.update({"radio": {"frequency": 915_000_000}})
+
 print("-- old firmware")
 api.remove_ble_device("AA:BB:CC:DD:EE:01")
 wait(lambda: core.radio.status.state != "online", 10, "unpaired: radio detached")

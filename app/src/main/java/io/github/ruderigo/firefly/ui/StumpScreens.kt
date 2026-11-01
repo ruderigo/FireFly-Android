@@ -1,5 +1,18 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package io.github.ruderigo.firefly.ui
 
+import kotlinx.coroutines.delay
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +55,22 @@ import org.json.JSONObject
 /** Stump nodes heard on the mesh (from their stump.node beacon) and the ones joined over Wi-Fi. */
 @Composable
 fun StumpsScreen(go: (Route) -> Unit) {
-    val nodes = engineData(emptyList<JSONObject>()) { Engine.arr("stump_nodes").objects() }
+    val onWifi = WifiHttp.local.collectAsState().value != null
+    val nodes = engineData(emptyList<JSONObject>(), onWifi) { Engine.arr("stump_nodes", onWifi).objects() }
+    // Pull down: ask every Stump whether it's there (Wi-Fi probed, LoRa asked for a path). One
+    // at a time; pulling again meanwhile does nothing.
+    var refreshing by remember { mutableStateOf(false) }
+    val listScope = rememberCoroutineScope()
+    fun refreshAll() {
+        if (refreshing) return
+        refreshing = true
+        listScope.launch {
+            val started = System.currentTimeMillis()
+            runCatching { withContext(Dispatchers.IO) { Engine.call("stump_refresh_all", onWifi) } }
+            delay((800 - (System.currentTimeMillis() - started)).coerceAtLeast(0))   // long enough to see
+            refreshing = false
+        }
+    }
     // Stumps we know that answer on this Wi-Fi (STUMP?): open them here, or follow them to the
     // address the router gave them since. One broadcast, at most every 20 s.
     val gateway by WifiHttp.gateway.collectAsState()
@@ -57,6 +85,8 @@ fun StumpsScreen(go: (Route) -> Unit) {
         onRemove = { removing = n; acting = null }) }
     removing?.let { n -> ConfirmRemoveStump(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
         keysOf(n).forEach { Engine.fire("stump_remove", it) }; removing = null } }
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshAll() },
+        modifier = Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -71,8 +101,11 @@ fun StumpsScreen(go: (Route) -> Unit) {
             val both = (n.optJSONArray("transports")?.length() ?: 1) > 1
             Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Node(n.optString("key"))) }, onLongClick = { acting = n }),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text("⌂", style = MaterialTheme.typography.titleLarge.copy(color = if (n.optInt("online") == 1) Amber.Ember else Amber.Dim),
-                    modifier = Modifier.padding(end = 12.dp))
+                // A stump: filled when it answers (on the Wi-Fi, or heard over LoRa lately), outlined when not.
+                val alive = n.optBoolean("alive")
+                androidx.compose.material3.Icon(painterResource(if (alive) R.drawable.ic_stump_online else R.drawable.ic_stump),
+                    contentDescription = stringResource(if (alive) R.string.stump_online else R.string.stump_not_answering),
+                    tint = if (alive) Amber.Ember else Amber.Dim, modifier = Modifier.padding(end = 12.dp).size(26.dp))
                 Column(Modifier.weight(1f)) {
                     Text(n.optString("name").ifBlank { n.optString("address") }, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -94,6 +127,7 @@ fun StumpsScreen(go: (Route) -> Unit) {
                 .clip(Small).clickable { Engine.fire("stump_restore_hidden") }.padding(6.dp),
                 style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
         }
+    }
     }
 }
 
@@ -164,20 +198,37 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     var key by remember(openedAs) { mutableStateOf(openedAs) }
     var tab by remember(openedAs) { mutableStateOf("room") }
     val scope = rememberCoroutineScope()
-    val view = engineData(JSONObject(), key) { Engine.obj("stump_view", key) }
+    val onWifi = WifiHttp.local.collectAsState().value != null       // the phone is on a Wi-Fi
+    val view = engineData(JSONObject(), key, onWifi) { Engine.obj("stump_view", key, null, onWifi) }
     LaunchedEffect(view) {
         view.optString("moved_to").takeIf { it.isNotBlank() && it != "null" && it != key }?.let { key = it }
     }
     val mesh = key.startsWith("mesh:")
-    // Billboard and files: Wi-Fi only, read once when the node opens (and on Refresh),
-    // not on every chat change. A feature the node doesn't offer has no tab.
-    var board by remember(key) { mutableStateOf<JSONObject?>(null) }
-    var shelf by remember(key) { mutableStateOf<JSONObject?>(null) }
+    // Billboard and files come from wherever this Stump answers on the Wi-Fi now, whichever
+    // side the screen was opened on; the engine says (reach: "wifi" with its address, "lora",
+    // "no_wifi", "offline"). Settled: a single missed poll doesn't make the icons blink.
+    val reachNow = view.optJSONObject("reach")
+    val reachState = settled(reachNow?.optString("state") ?: if (mesh) "lora" else "wifi") { if (it == "wifi") 300L else 1500L }
+    val webKey = reachNow?.optString("web")?.takeIf { reachState == "wifi" && it.isNotBlank() && it != "null" }
+        ?: key.takeIf { !mesh && reachState == "wifi" }
+    // Over LoRa only, the billboard is asked of the Stump's LoRa side (/board, Stump 1.0.0-beta.38).
+    val loraKey = view.optString("lora_key").takeIf { it.isNotBlank() && it != "null" }
+    val loraBoard = engineData(JSONObject(), loraKey, reachState) {
+        if (loraKey != null && reachState == "lora") Engine.obj("stump_board_lora_view", loraKey) else JSONObject()
+    }
+    var board by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
+    var shelf by remember(key, webKey) { mutableStateOf<JSONObject?>(null) }
     var plugins by remember(key) { mutableStateOf<JSONObject?>(null) }     // its !commands
     var tools by remember(key) { mutableStateOf<JSONObject?>(null) }       // a newer FireFly on its card
     var chain by remember(key) { mutableStateOf<JSONObject?>(null) }       // its place in a chain of Stumps
     var radio by remember(key) { mutableStateOf<JSONObject?>(null) }       // its radio settings beside ours
     val version = myVersion(LocalContext.current)
+    LaunchedEffect(webKey) {
+        if (webKey != null && mesh) {
+            board = Engine.obj("stump_board", webKey)
+            shelf = Engine.obj("stump_files", webKey)
+        }
+    }
     LaunchedEffect(key) {
         if (!mesh) {
             board = Engine.obj("stump_board", key)
@@ -188,7 +239,23 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
             radio = Engine.obj("stump_radio", key)
         }
     }
+    // It restarted (a new boot id in its beacon, Stump 1.0.0-beta.43): its chain comes back
+    // within seconds, so ask again shortly after, then once more.
+    val restartedAt = view.optDouble("restarted_at").takeIf { !it.isNaN() }
+    LaunchedEffect(key, restartedAt) {
+        if (restartedAt == null || mesh) return@LaunchedEffect
+        for (wait in listOf(5_000L, 20_000L)) {
+            delay(wait)
+            chain = Engine.obj("stump_chain", key)
+            radio = Engine.obj("stump_radio", key)
+        }
+    }
     val auth = view.optString("auth", "none")
+    // Into a Stump only once it knows who we are: FireFly verifies itself (Wi-Fi and LoRa) and
+    // the room waits behind a popup until it's done, or the user chooses to go in anyway.
+    var entered by remember(openedAs) { mutableStateOf(false) }
+    if (!entered) VerifyGate(key, view.optString("name").ifBlank { key.substringAfter(":") }, mesh,
+        onEnter = { entered = true }, onBack = back)
     val threads = view.optJSONArray("threads")?.objects() ?: emptyList()
     val unread = threads.sumOf { it.optInt("unread") }
     Column(Modifier.fillMaxSize()) {
@@ -265,28 +332,132 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         }
         if (auth == "failed") Text(stringResource(R.string.verify_failed, view.optString("auth_detail")),
             style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error), modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-        val tabs = buildList {
-            add("room" to "#" + view.optString("room", "…"))
-            add("dm" to stringResource(R.string.private_tab, unread))
-            if (!mesh && board.webState() != "off") add("board" to stringResource(R.string.tab_board))
-            if (!mesh && shelf.webState() != "off") add("files" to stringResource(R.string.tab_files))
+        // The navigation: the room on the left half; private messages, billboard and files as
+        // icons sharing the right half (only those this Stump offers here). An icon is outlined
+        // when there's nothing new and filled when there is (unread DMs; later, new notices or
+        // files).
+        // The same layout over Wi-Fi and LoRa: a tab this Stump doesn't offer here (the billboard
+        // and files over LoRa, or switched off) stays in place, dimmed, and can't be opened.
+        val iconTabs = listOf(
+            Triple("dm", R.drawable.ic_tab_envelope to R.drawable.ic_tab_envelope_new, unread > 0),
+            Triple("board", R.drawable.ic_tab_board to R.drawable.ic_tab_board_new, false),
+            Triple("files", R.drawable.ic_tab_files to R.drawable.ic_tab_files_new, false))
+        val offered = mapOf("dm" to true,
+            // the billboard over Wi-Fi, or over LoRa (/board); still loading counts as offered
+            "board" to ((webKey != null && board.webState() != "off") ||
+                        (reachState == "lora" && loraKey != null && loraBoard.optString("state") != "off")),
+            "files" to (webKey != null && shelf.webState() != "off"))
+        val shown = if (tab == "room" || offered[tab] == true) tab else "room"   // a tab whose feature turned out off
+        val tabDescriptions = mapOf("dm" to stringResource(R.string.private_tab, unread),
+            "board" to stringResource(R.string.tab_board), "files" to stringResource(R.string.tab_files))
+        // A tap on a billboard or files icon: the underline goes there while the engine checks
+        // the Stump still answers on the Wi-Fi (a probe), then it opens; or a note says why not
+        // (600 ms) and the underline goes back to the room. One at a time: taps while it's busy
+        // (checking, or the note) are ignored.
+        var bounce by remember(key) { mutableStateOf<String?>(null) }
+        var notice by remember(key) { mutableStateOf<String?>(null) }
+        var busy by remember(key) { mutableStateOf(false) }
+        val stumpName = view.optString("name").ifBlank { key.substringAfter(":") }
+        val texts = mapOf("lora" to stringResource(R.string.tab_not_over_lora), "no_wifi" to stringResource(R.string.tab_no_wifi),
+            "offline" to stringResource(R.string.stump_offline, stumpName),
+            "board_off" to stringResource(R.string.tab_board_off), "files_off" to stringResource(R.string.tab_files_off))
+        fun reason(id: String, state: String) = when {
+            state == "wifi" -> texts.getValue("${id}_off")
+            state == "lora" && id == "board" && loraBoard.optString("state") == "off" -> texts.getValue("board_off")
+            else -> texts[state] ?: texts.getValue("offline")
         }
-        val shown = if (tabs.any { it.first == tab }) tab else "room"     // a tab whose feature turned out off
-        Row(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
-            tabs.forEach { (id, label) ->
-                val accent = if (id == "dm") Amber.DmNick else Amber.Ember
-                Column(Modifier.weight(1f).clickable { tab = id }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(label, modifier = Modifier.padding(vertical = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelLarge.copy(color = if (shown == id) accent else Amber.Muted))
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(if (shown == id) accent else Amber.Sidebar))
+        fun bounceBack(id: String, why: String, startedAt: Long = System.currentTimeMillis()) {
+            scope.launch {
+                busy = true
+                bounce = id
+                delay((300 - (System.currentTimeMillis() - startedAt)).coerceAtLeast(0))
+                notice = why
+                delay(600)
+                notice = null
+                bounce = null
+                tab = "room"
+                busy = false
+            }
+        }
+        fun open(id: String) {
+            if (busy) return
+            if (id == "room" || id == "dm") { tab = id; return }
+            if (offered[id] != true) return bounceBack(id, reason(id, reachState))
+            val started = System.currentTimeMillis()
+            busy = true
+            bounce = id
+            scope.launch {
+                val r = runCatching { JSONObject(withContext(Dispatchers.IO) { Engine.call("stump_reach", key, onWifi, true) }) }
+                    .getOrNull()
+                val state = r?.optString("state") ?: "offline"
+                if (state == "wifi" || (state == "lora" && id == "board" && loraKey != null)) {
+                    bounce = null; tab = id; busy = false
+                } else {
+                    busy = false
+                    bounceBack(id, reason(id, state), started)
                 }
             }
         }
-        when (shown) {
-            "dm" -> PrivatePane(key, view, threads, mesh, go)
-            "board" -> BoardPane(key, board) { board = it }
-            "files" -> FilesPane(key, shelf) { shelf = it }
-            else -> RoomPane(key, view, mesh, plugins)
+        // On the billboard or files when it stops being reachable: say why, and back to the room.
+        LaunchedEffect(tab, offered[tab]) {
+            if ((tab == "board" || tab == "files") && offered[tab] == false && !busy) bounceBack(tab, reason(tab, reachState))
+        }
+        val under = bounce ?: shown                     // where the underline is
+        BoxWithConstraints(Modifier.fillMaxWidth().background(Amber.Sidebar)) {
+            val half = maxWidth / 2
+            val slot = half / iconTabs.size
+            val index = iconTabs.indexOfFirst { it.first == under }
+            val lineStart by animateDpAsState(if (index < 0) 0.dp else half + slot * index, tween(220), label = "tab line")
+            val lineWidth by animateDpAsState(if (index < 0) half else slot, tween(220), label = "tab width")
+            val lineColor by animateColorAsState(if (under == "dm") Amber.DmNick else Amber.Ember, tween(220), label = "tab colour")
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(bottom = 2.dp)) {
+                Box(Modifier.weight(1f).fillMaxHeight().clickable { open("room") }, contentAlignment = Alignment.CenterStart) {
+                    // "#room (topic)", from the left; too long for the half, it scrolls by itself so it
+                    // can be read through, left to right.
+                    val topic = view.optString("topic").takeIf { it.isNotBlank() && it != "null" }
+                    val roomColor = if (under == "room") Amber.Ember else Amber.Muted
+                    Text(buildAnnotatedString {
+                            withStyle(SpanStyle(color = roomColor)) { append("#" + view.optString("room", "…")) }
+                            if (topic != null) withStyle(SpanStyle(color = Amber.Dim, fontWeight = FontWeight.Normal)) { append("  ($topic)") }
+                        },
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
+                            .basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1500, repeatDelayMillis = 2500),
+                        maxLines = 1, style = MaterialTheme.typography.labelLarge)
+                }
+                Row(Modifier.weight(1f)) {
+                    iconTabs.forEach { (id, icons, isNew) ->
+                        val accent = if (id == "dm") Amber.DmNick else Amber.Ember
+                        val available = offered[id] == true
+                        val color = when { !available -> Amber.Border; under == id -> accent; isNew -> accent; else -> Amber.Muted }
+                        Box(Modifier.weight(1f).fillMaxHeight()
+                            .clickable { open(id) }
+                            .semantics { contentDescription = tabDescriptions.getValue(id) + if (available) "" else ", " + reason(id, reachState) },
+                            contentAlignment = Alignment.Center) {
+                            androidx.compose.material3.Icon(
+                                painterResource(if (isNew) icons.second else icons.first), contentDescription = null,
+                                tint = color, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+            }
+            Box(Modifier.align(Alignment.BottomStart).offset(x = lineStart).width(lineWidth).height(2.dp).background(lineColor))
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.fillMaxSize()) {
+                when (shown) {
+                    "dm" -> PrivatePane(key, view, threads, mesh, go)
+                    "board" -> if (webKey == null && loraKey != null) LoraBoardPane(loraKey, loraBoard)
+                               else BoardPane(webKey ?: key, board) { board = it }
+                    "files" -> FilesPane(webKey ?: key, shelf) { shelf = it }
+                    else -> RoomPane(key, view, mesh, plugins)
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(visible = notice != null, enter = fadeIn(tween(120)),
+                exit = fadeOut(tween(150)), modifier = Modifier.align(Alignment.TopCenter).padding(top = 10.dp)) {
+                Text(notice ?: "", modifier = Modifier.clip(Medium).background(Amber.Panel)
+                    .border(1.dp, Amber.Border, Medium).padding(horizontal = 14.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(color = Amber.Text))
+            }
         }
     }
 }
@@ -296,25 +467,51 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
     val draft = remember(key) { mutableStateOf("") }
     val rooms = view.optJSONArray("rooms")?.objects() ?: emptyList()
     val here = view.optString("room")
+    // A room switch or a refresh on its way (the engine says, until the Stump answers; a tap
+    // counts at once, for 2 s, until the engine's word comes): the buttons wait, the room
+    // being joined blinks with "…", and "refresh" reads "refreshing…".
+    var pressedJoin by remember(key) { mutableStateOf<String?>(null) }
+    var pressedAt by remember(key) { mutableStateOf(0L) }
+    var pressedRoomsAt by remember(key) { mutableStateOf(0L) }
+    var recheck by remember { mutableStateOf(0) }
+    LaunchedEffect(pressedAt, pressedRoomsAt) { delay(2100); recheck++ }
+    val now = if (recheck >= 0) System.currentTimeMillis() else 0L
+    val joining = view.optString("joining").takeIf { it.isNotBlank() && it != "null" }
+        ?: pressedJoin?.takeIf { now - pressedAt < 2000 && !stumpSameRoom(it, here) }
+    val refreshing = view.optBoolean("refreshing") || now - pressedRoomsAt < 2000
+    var blink by remember { mutableStateOf(true) }
+    LaunchedEffect(joining) { blink = true; while (joining != null) { delay(450); blink = !blink } }
     Row(Modifier.fillMaxWidth().background(Amber.Sidebar).horizontalScroll(rememberScrollState()).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         val names = (rooms.map { it.optString("name") } + here).filter { it.isNotBlank() }.distinct()
         names.forEach { r ->
             val info = rooms.firstOrNull { it.optString("name") == r }
             val tier = info?.optString("tier")?.takeIf { it == "minted" || it == "hybrid" }
-            Text("#$r" + (tier?.let { " ·$it" } ?: "") + (info?.optInt("count", -1)?.takeIf { it >= 0 }?.let { " $it" } ?: ""),
+            val target = joining != null && stumpSameRoom(r, joining)
+            Text("#$r" + (tier?.let { " ·$it" } ?: "") + (info?.optInt("count", -1)?.takeIf { it >= 0 }?.let { " $it" } ?: "") +
+                    (if (target) " …" else ""),
                 modifier = Modifier.padding(end = 6.dp).clip(Small)
-                    .border(1.dp, if (r == here) Amber.Ember else Amber.Border, Small)
-                    .clickable(enabled = r != here) { Engine.fire("stump_join", key, r) }
+                    .border(1.dp, if (r == here || target) Amber.Ember else Amber.Border, Small)
+                    .clickable(enabled = r != here && joining == null) {
+                        pressedJoin = r; pressedAt = System.currentTimeMillis()
+                        Engine.fire("stump_join", key, r)
+                    }
                     .padding(horizontal = 8.dp, vertical = 5.dp),
-                style = MaterialTheme.typography.labelMedium.copy(color = if (r == here) Amber.Ember else Amber.Muted))
+                style = MaterialTheme.typography.labelMedium.copy(color = when {
+                    target -> if (blink) Amber.Ember else Amber.Dim
+                    r == here -> Amber.Ember
+                    joining != null -> Amber.Border
+                    else -> Amber.Muted
+                }))
         }
-        Text(stringResource(R.string.list_rooms), modifier = Modifier.clip(Small).clickable { Engine.fire("stump_command", key, "/rooms") }
-            .padding(horizontal = 8.dp, vertical = 5.dp), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
+        Text(stringResource(if (refreshing) R.string.rooms_refreshing else R.string.list_rooms),
+            modifier = Modifier.clip(Small).clickable(enabled = !refreshing) {
+                pressedRoomsAt = System.currentTimeMillis()
+                Engine.fire("stump_command", key, "/rooms")
+            }.padding(horizontal = 8.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelMedium.copy(color = if (refreshing) Amber.Dim else Amber.Ember))
     }
-    view.optString("topic").takeIf { it.isNotBlank() && it != "null" }?.let {
-        Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-    }
+    // (The topic is in the room's tab, after its name.)
     val lines = view.optJSONArray("lines")?.objects() ?: emptyList()
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
@@ -380,8 +577,9 @@ private fun ColumnScope.PrivatePane(key: String, view: JSONObject, threads: List
     // People first, then the Stumps (🪵, as the node's web chat groups them). On a chain,
     // people on other Stumps are listed as nick@thatstump and reached the same way.
     val blocked = view.optJSONArray("blocked")?.strings() ?: emptyList()
+    val bots = view.optJSONArray("bots")?.strings()?.toSet() ?: emptySet()     // "bot": true (beta.36): no DMs to them
     val others = (view.optJSONArray("users")?.strings() ?: emptyList()).map { it.removePrefix("~") }
-        .filter { it != me && it !in talking && it.lowercase() !in blocked }.sortedBy { it in stumps }
+        .filter { it != me && it !in talking && it.lowercase() !in blocked && it !in bots }.sortedBy { it in stumps }
     var to by remember { mutableStateOf("") }
     var choosing by remember { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<String?>(null) }
@@ -534,6 +732,81 @@ private fun StumpActions(name: String, onDismiss: () -> Unit, onHide: () -> Unit
         })
 }
 
+/**
+ * Entering a Stump: "Verifying you with <name>…" until the Stump has FireFly's signature
+ * (/hello over Wi-Fi, /auth over LoRa), then the room opens by itself. Already verified this
+ * run: no popup at all. A failure says why and offers Try again, Go in anyway, or Back.
+ */
+@Composable
+private fun VerifyGate(key: String, name: String, mesh: Boolean, onEnter: () -> Unit, onBack: () -> Unit) {
+    var state by remember(key) { mutableStateOf<String?>(null) }      // null: not asked yet (no popup)
+    var detail by remember(key) { mutableStateOf("") }
+    var attempt by remember(key) { mutableIntStateOf(0) }
+    var elapsed by remember(key) { mutableIntStateOf(0) }
+    LaunchedEffect(key, attempt) {
+        val started = System.currentTimeMillis()
+        var again = true                    // entering, or Try again: ask anew; then only read
+        while (true) {
+            val v = Engine.obj("stump_verify", key, again)
+            again = false
+            val st = v.optString("state", "verifying")
+            elapsed = ((System.currentTimeMillis() - started) / 1000).toInt()
+            if (st == "ok" || st == "not_needed") {
+                if (state != null) { state = "ok"; delay(600) }        // seen: "Verified ✓"
+                onEnter(); return@LaunchedEffect
+            }
+            state = st
+            detail = v.optString("detail").takeIf { it != "null" } ?: ""
+            if (st == "failed") return@LaunchedEffect
+            delay(700)
+        }
+    }
+    val st = state ?: return
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onBack, containerColor = Amber.Panel, shape = Large,
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false),
+        title = { Text(stringResource(R.string.verify_gate_title, name), style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column {
+                when (st) {
+                    "ok" -> Text(stringResource(R.string.verify_gate_ok),
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Amber.Ember))
+                    "failed" -> {
+                        Text(stringResource(R.string.verify_failed, detail.ifBlank { "?" }),
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Amber.Error))
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.verify_gate_failed_help), style = MaterialTheme.typography.bodySmall)
+                    }
+                    else -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Amber.Ember,
+                                strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text(stringResource(R.string.verify_gate_body), style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f))
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(if (mesh) R.string.verify_gate_lora else R.string.verify_gate_wifi, elapsed),
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (st == "failed") Row {
+                Text(stringResource(R.string.verify_gate_enter_anyway), modifier = Modifier.clip(Small)
+                    .clickable { onEnter() }.padding(10.dp), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
+                Text(stringResource(R.string.verify_gate_retry), modifier = Modifier.clip(Small)
+                    .clickable { state = "verifying"; elapsed = 0; attempt++ }.padding(10.dp),
+                    style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember))
+            }
+        },
+        dismissButton = {
+            if (st != "ok") Text(stringResource(R.string.verify_gate_back), modifier = Modifier.clip(Small)
+                .clickable { onBack() }.padding(10.dp), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Muted))
+        })
+}
+
 @Composable
 private fun ConfirmRemoveStump(name: String, onDismiss: () -> Unit, onConfirm: () -> Unit) =
     ConfirmDialog(stringResource(R.string.stump_remove_title, name), stringResource(R.string.stump_remove_confirm),
@@ -600,3 +873,11 @@ private fun ConfirmStumpDmDelete(nick: String, onDismiss: () -> Unit, onConfirm:
 private fun ConfirmStumpBlock(nick: String, onDismiss: () -> Unit, onConfirm: () -> Unit) =
     ConfirmDialog(stringResource(R.string.block_title, nick), stringResource(R.string.stump_block_text, nick),
         stringResource(R.string.block), onConfirm = onConfirm, onDismiss = onDismiss)
+
+
+/** The same room by the Stump's names for it (#lxmf is #lora-mesh), case aside. */
+private fun stumpSameRoom(a: String, b: String): Boolean {
+    val alias = mapOf("lxmf" to "lora-mesh", "lora" to "lora-mesh", "chained" to "wifi-mesh", "mesh" to "wifi-mesh")
+    fun canon(r: String) = r.trim().removePrefix("#").lowercase().let { alias[it] ?: it }
+    return canon(a) == canon(b)
+}

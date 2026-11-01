@@ -57,15 +57,15 @@ jobs:
 
       - name: The greeting (/hello), and /auth + /nick on older Stumps
         timeout-minutes: 3
-        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py
+        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py run_verify_gate.py
 
       - name: Hybrid access, private messages over LoRa and Wi-Fi, a steady list
         timeout-minutes: 3
-        run: bash engine-tests/ci_run.sh run_hybrid.py run_dm_sides.py run_order.py
+        run: bash engine-tests/ci_run.sh run_hybrid.py run_dm_sides.py run_order.py run_board_lora.py
 
       - name: A Stump that moved, a phone with no radio, home Wi-Fi
         timeout-minutes: 4
-        run: bash engine-tests/ci_run.sh run_relocate.py run_reach.py run_gateway.py
+        run: bash engine-tests/ci_run.sh run_relocate.py run_reach.py run_gateway.py run_wifi_alt.py run_reach_states.py
 
       - name: Stump node without Opus
         timeout-minutes: 2

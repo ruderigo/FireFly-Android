@@ -273,7 +273,7 @@ def remove_ble_device(address):
 
 
 # ------------------------------------------------------------------ Stump
-def stump_nodes():
+def stump_nodes(on_wifi=None):
     """One entry per Stump: a node reached over both LoRa and Wi-Fi (the same LXMF address,
     which a Wi-Fi node gives in its poll) is one row. The row is the transport to open first
     (Wi-Fi while it answers, else LoRa); the other ones are in "others"."""
@@ -307,6 +307,7 @@ def stump_nodes():
         first["name"] = next((m["name"] for m in members if m.get("name") and not str(m["name"]).startswith("Stump Wi-Fi (")),
                              first.get("name"))
         first["group"] = g                  # stays the same whichever transport opens first
+        first["alive"] = c.stump_reach(first["key"], _flag(on_wifi))["state"] in ("wifi", "lora")
         out.append(first)
     # A steady order: by name, not by who was heard last (Stumps close to each other beacon and
     # answer all the time, and a list sorted by "last heard" kept jumping).
@@ -371,7 +372,7 @@ def stump_close(key, forget=False):
     _need().close_stump(key, forget=bool(forget))
 
 
-def stump_view(key, room=None):
+def stump_view(key, room=None, on_wifi=None):
     c = _need()
     asked = key
     key = c.resolve(key)
@@ -383,6 +384,11 @@ def stump_view(key, room=None):
     node["lines"] = c.store.lines(key, room)
     node["viewing"] = room
     node["threads"] = c.store.dm_threads(c.same_stump(key))     # over LoRa and Wi-Fi alike
+    node["reach"] = c.stump_reach(key, _flag(on_wifi))          # billboard, files: where from, or why not
+    node["lora_key"] = next((k for k in c.same_stump(key) if k.startswith("mesh:")), None)
+    node.update(sess.busy_state())                  # a /join or /rooms on its way: the buttons wait
+    node["bots"] = sorted(getattr(sess, "bots", ()) | set().union(*[getattr(c.sessions.get(k), "bots", set())
+                                                                    for k in c.same_stump(key)]))
     node["blocked"] = c.store.stump_blocked(c.stump_id(key))
     node["propagation"] = _stump_pn(c, node) if key.startswith("mesh:") else None
     node["hw"] = getattr(sess, "hw", None)        # the node's radio, for a status light (Wi-Fi poll)
@@ -392,11 +398,17 @@ def stump_view(key, room=None):
     sess.auth_timed_out()
     node["auth"] = (c.store.stump_node(key) or {}).get("auth", node.get("auth"))
     node["auth_detail"] = (c.store.stump_node(key) or {}).get("auth_detail", node.get("auth_detail"))
+    node["verify"] = dict(sess.verify)
+    lx = node.get("lxmf") or (key.partition(":")[2] if key.startswith("mesh:") else None)
+    node["restarted_at"] = c.restarted_at.get(lx) if lx else None     # its chain and Stumps lists come back
     if key.startswith("mesh:"):
         # Over LoRa with nothing to carry it: offer this Stump's Wi-Fi entry instead.
         node["reachable"] = c.can_reach(node["address"])
-        node["wifi_alt"] = next((n["key"] for n in c.store.stump_nodes()
-                                 if n["transport"] == "wifi" and n.get("lxmf") == node["address"]), None)
+        alt = next((n for n in c.store.stump_nodes()
+                    if n["transport"] == "wifi" and n.get("lxmf") == node["address"]), None)
+        node["wifi_alt"] = alt["key"] if alt else None
+        # It answers on the Wi-Fi now: its billboard and files can be had there.
+        node["wifi_alt_online"] = bool(alt and alt.get("online"))
     return _j(node)
 
 
@@ -428,6 +440,19 @@ def stump_command(key, line):
 
 def stump_auth(key):
     return _need().session(key).start_auth()
+
+
+def stump_verify(key, again=False):
+    """Entering a Stump: FireFly proves who it is first (Wi-Fi and LoRa alike), and the
+    screen waits. -> {"state": idle|verifying|ok|not_needed|failed, "detail", "transport"}."""
+    c = _need()
+    key = c.resolve(key)
+    sess = c.session(key)
+    sess.auth_timed_out()
+    v = sess.verify_now(again=_flag(again))
+    v["transport"] = sess.pipe.kind
+    v["key"] = key
+    return _j(v)
 
 
 def stump_dm_thread(key, nick):
@@ -589,12 +614,78 @@ def discover_lan(own_ip, prefix, skip_json="[]"):
     return _j(found)
 
 
-def stump_refresh_wifi():
+def stump_web_reachable(key):
+    """Does this Wi-Fi Stump answer right now? (GET /node.json, 1.5 s, any answer.) -> true/false"""
+    return _j(_need()._web_answers(str(key)))
+
+
+def stump_reach(key, on_wifi=None, probe=False):
+    """How a Stump can be reached now (Core.stump_reach): before opening its billboard or
+    files (probe: ask its Wi-Fi side now), and to say why not."""
+    return _j(_need().stump_reach(str(key), _flag(on_wifi), bool(probe)))
+
+
+def stump_refresh_all(on_wifi=None):
+    """Pull to refresh on the Stumps tab: is each Stump there? A few seconds."""
+    return _j(_need().refresh_stumps(_flag(on_wifi)))
+
+
+def _flag(v):
+    """A yes/no from the app (Kotlin Boolean, or a string), None when not given."""
+    if v is None or isinstance(v, bool):
+        return v
+    return str(v).lower() == "true"
+
+
+def stump_board_lora(key, q=""):
+    """The billboard over LoRa (Stump 1.0.0-beta.38): ask for the newest notices (titles)."""
+    c = _need()
+    c.session(_lora_key(c, key)).board_request(q)
+
+
+def stump_board_lora_item(key, pid):
+    c = _need()
+    c.session(_lora_key(c, key)).board_item(pid)
+
+
+def stump_board_lora_post(key, title, body=""):
+    c = _need()
+    return _j(c.session(_lora_key(c, key)).board_post(title, body))
+
+
+def stump_board_lora_view(key):
+    """What the billboard over LoRa has said so far: {"state": idle|waiting|ok|empty|off,
+    "posts": [{"id", "title"}], "items": {id: {"title", "body"} | {"gone"}}, "item", "post"}."""
+    c = _need()
+    sess = c.session(_lora_key(c, key))
+    b = dict(sess.board_lora)
+    asked, now = sess.board_asked, time.time()
+    pend = sess.board_pending
+    b["waiting_s"] = int(now - pend[2]) if pend else None
+    # No answer yet after 2 min: said, though a later answer is still taken when it comes.
+    if asked["list"] and now - asked["list"][1] > sess.BOARD_WAIT_S and b.get("state") == "waiting":
+        b["state"] = "no_answer"
+    if asked["post"] and now - asked["post"][1] > sess.BOARD_WAIT_S:
+        b["post"] = {"state": "no_answer", "title": asked["post"][0]}
+    b["items_waiting"] = sorted(asked["items"])
+    return _j(b)
+
+
+def _lora_key(c, key):
+    """The LoRa side of this Stump (its billboard over LoRa is asked there)."""
+    key = c.resolve(str(key))
+    if key.startswith("mesh:"):
+        return key
+    return next((k for k in c.same_stump(key) if k.startswith("mesh:")), key)
+
+
+def stump_refresh_wifi(force=False):
     """Known Stumps answering on this Wi-Fi: opened there, or followed to a new address.
-    Cheap (one broadcast, ~1.5 s); the Stumps tab calls it when shown."""
+    Cheap (one broadcast, ~1.5 s); the Stumps tab calls it when shown, and the app when the
+    phone's Wi-Fi changes and has settled (force: whatever the last one was)."""
     c = _need()
     now = time.time()
-    if now - getattr(c, "_refreshed_at", 0) < 20:
+    if not force and now - getattr(c, "_refreshed_at", 0) < 20:
         return _j([])
     c._refreshed_at = now
     return _j(c.refresh_wifi())

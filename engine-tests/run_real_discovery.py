@@ -132,6 +132,9 @@ try:
     check("FireFly reads the five-item beacon's first four as before", info is not None and info[0] == LXMF, info)
     check("...and its addresses", stump.beacon_http(data) and all(u.startswith("http://") for u in stump.beacon_http(data)),
           stump.beacon_http(data))
+    if hasattr(stump_discovery, "BOOT"):          # Stump 1.0.0-beta.43+
+        check("...and its boot id (caps['b']), the one this Stump booted with",
+              stump.beacon_boot(data) == stump_discovery.BOOT, (stump.beacon_boot(data), stump_discovery.BOOT))
 except Exception as e:
     check("the Stump's beacon builder", False, repr(e))
 
