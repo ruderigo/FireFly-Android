@@ -6,11 +6,10 @@ the engine's own threads, and results arrive as events on the listener
 which the app re-reads when told something changed.
 """
 import json
-import os
 import threading
 import time
 
-from .core import CODEC2_FRAMES, Core, single_packet_size
+from .core import Core, single_packet_size
 from .audio import PLAYABLE, valid_voice
 from . import stump
 from .stump_session import mesh_key

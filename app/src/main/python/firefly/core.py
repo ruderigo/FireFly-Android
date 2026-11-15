@@ -91,6 +91,7 @@ class Core:
         self._relocate_tried = {}   # key -> when we last asked where it went
         self.extra_ifaces = []      # AutoInterface / TCP interfaces we attached
         self._introduced = set()    # peers we've sent to this session (announced to first)
+        self._beacon_asked = set()  # peers whose Stump beacon we've asked a path for
         self.blocked = set()        # LXMF addresses whose announces and messages are ignored
         self.iface_errors = {}
         self.running = False
@@ -315,8 +316,6 @@ class Core:
             self.announce_heard[h] = time.time()
         if h in self.stumps and fresh:
             self.store.upsert_stump_node(mesh_key(h), "mesh", h, last_seen=time.time())
-
-    _beacon_asked = set()
 
     def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None, fresh=True, release=None):
         """fresh: the beacon came from the Stump now (a relay's remembered copy isn't hearing
@@ -883,7 +882,10 @@ class Core:
         lxm_hash = lxm.hash.hex() if lxm.hash else None
         if lxm_hash and self.store.has_message(lxm_hash):
             return
-        content = lxm.content_as_string() if lxm.content else ""
+        # Bytes that aren't UTF-8 show as replacement characters. (LXMF's content_as_string()
+        # gives None for those, and the Store's content can't be NULL: the message was lost,
+        # with an exception in LXMF's delivery thread.)
+        content = bytes(lxm.content).decode("utf-8", "replace") if lxm.content else ""
         audio = _audio_field(lxm.fields)
         attachments = [label for fid, label in FIELD_NAMES.items()
                        if lxm.fields and fid in lxm.fields and not (fid == LXMF.FIELD_AUDIO and audio)]
@@ -1303,7 +1305,7 @@ class Core:
             time.sleep(MONITOR_INTERVAL_S)
 
 
-from .audio import CODEC2_FRAMES, MAX_VOICE_BYTES, OPUS_OGG, PLAYABLE, duration_ms as _voice_ms
+from .audio import CODEC2_FRAMES, MAX_VOICE_BYTES, OPUS_OGG
 
 VOICE_AUTO, VOICE_DEFAULT_CODEC2 = 0, 4      # Automatic; Codec 2 1200
 

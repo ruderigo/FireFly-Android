@@ -258,7 +258,6 @@ def parse_address_link(text):
     a Stump), "key": the 64-byte public key given by key= (None: none), "key_bad": key= was
     there but isn't 64 bytes of base64url}.
     Stump 1.0.0-beta.52: lxmf://<address>?stump=<name, %-encoded UTF-8>&key=<base64url>."""
-    import base64
     from urllib.parse import parse_qs, unquote
     raw = "".join(str(text or "").split())
     m = _ADDRESS_TEXT.match(raw.lower())

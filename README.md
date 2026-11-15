@@ -14,6 +14,30 @@ Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
+### Unreleased: code review (Nov 2026)
+- **A message whose content isn't text was lost.** Any LXMF app can send bytes that
+  aren't UTF-8 as a message's content; LXMF gives `None` for those and the
+  conversation's store can't hold it: the message never showed, with an exception in
+  LXMF's delivery thread. It's kept now, what isn't text shown as replacement
+  characters. Test: `run_binary_content` (fails on build 73).
+- The list of peers already asked for a Stump beacon belongs to each engine (it was a
+  class attribute, shared by every engine in a process: the tests, mostly). Imports
+  nothing used, removed. No other change in behaviour.
+- Noted, not changed (for the pentest, and to decide together):
+  - *Automatic* propagation node: a Stump's own node comes first, but with none known
+    the nearest node announced in the last day is taken, whoever runs it. Messages
+    left there stay encrypted for their recipient; the node can drop them, and sees
+    who syncs and who is written to. Consider taking only a Stump's node
+    automatically, and never leaving a node that works for one never used.
+  - Every LXMF announce from an address not seen before adds a row to the store's
+    peers (never cleared) and sends one path request for that identity's Stump
+    beacon, on every interface, LoRa included. A stream of new identities (cheap on
+    a TCP or Wi-Fi interface) fills the Chats list's contacts and makes each phone in
+    range transmit. Consider a rate limit on those requests, and a cap on peers only
+    ever heard.
+  - `fresh_announce`'s memory, `announce_heard`, `beacon_heard`, `pn_asked` grow with
+    every address heard for as long as the app runs (about 1 KB each at most).
+
 ### 0.6.1-beta.73 (Stump 1.0.0-beta.73)
 - Build 73, for Stump 1.0.0-beta.73: stumpid can no longer be left switched off
   after a board reset (the kit's WROVERs answered "unknown command" to /auth
