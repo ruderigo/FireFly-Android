@@ -14,6 +14,21 @@ Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
+### Unreleased: packed text, more of a chat line in each LoRa packet (with the Stump team)
+- One LoRa packet holds 295 bytes of LXMF content; the rest of its 500 goes to
+  addresses, the signature and the encryption, whatever the message. To and from
+  those whose LXMF announce says they read it (a fifth item after FireFly's app tag,
+  `{"z": 1}`: a Stump after 1.0.0-beta.73, another FireFly), a message's text now goes
+  **packed**: about 60% of its bytes for ordinary chat, a sixth for a Stump's `/help`
+  (800 bytes over a link, now 134 in one packet). A line too long for one packet
+  often fits; a Stump's batch of room lines takes fewer packets. Everyone else
+  (Sideband, MeshChat, an older Stump) gets plain text exactly as before.
+- The format is the Stump's (`ztext.py`, the same file): a DEFLATE block whose Huffman
+  tables and dictionary are fixed and never sent, read with zlib, never more than
+  2048 bytes out. Stump's CLIENT_QUICKSTART, *Packed text*, has it in full.
+- The Store, the UI and every retry keep the text itself; the setting `packed_text`
+  (on) turns it off. Test: `run_packed_text`.
+
 ### Unreleased: code review (Nov 2026)
 - **A message whose content isn't text was lost.** Any LXMF app can send bytes that
   aren't UTF-8 as a message's content; LXMF gives `None` for those and the

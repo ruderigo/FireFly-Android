@@ -322,8 +322,9 @@ def app_tag(version=None, build=None):
     return tag
 
 
-def with_app_tag(app_data, tag):
-    """LXMF's own announce data [name, stamp cost, [functions]] with the app tag after it.
+def with_app_tag(app_data, tag, caps=None):
+    """LXMF's own announce data [name, stamp cost, [functions]] with the app tag after it,
+    then `caps` when given: what this app can do, {"z": 1} = it reads packed text (ztext.py).
     Upstream LXMF reads the first three items only, so every LXMF app reads it as before."""
     if not app_data or not tag:
         return app_data
@@ -333,7 +334,18 @@ def with_app_tag(app_data, tag):
         return app_data
     if not isinstance(d, list) or len(d) < 3:
         return app_data
-    return msgpack.packb(list(d[:3]) + [tag])
+    return msgpack.packb(list(d[:3]) + [tag] + ([caps] if caps else []))
+
+
+def reads_packed(app_data):
+    """An LXMF announce whose fifth item says its sender reads packed text ({"z": 1}): a Stump
+    since the release after 1.0.0-beta.73, another FireFly."""
+    try:
+        d = msgpack.unpackb(app_data)
+        z = d[4].get("z") if isinstance(d, list) and len(d) > 4 and isinstance(d[4], dict) else None
+        return isinstance(z, int) and not isinstance(z, bool) and z >= 1
+    except Exception:
+        return False
 
 
 def is_paper_message(text):
