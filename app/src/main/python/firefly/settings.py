@@ -44,6 +44,7 @@ DEFAULTS = {
     "stump_ssids": [],               # hotspots joined as Stumps from Find Stumps (marked "Stump" in scans)
     "stump_prefer": "wifi",          # Stumps: private messages over "wifi" while on its Wi-Fi, or "lora" (/hello)
     "voice_mode": 16,                # Opus (natural voice) everywhere; 0 = Automatic; 3-9 = a Codec 2 mode
+    "packed_text": True,             # text written shorter to and from those who read it (ztext.py): more per LoRa packet
     "log_level": 3,
     "settings_version": 4,
 }

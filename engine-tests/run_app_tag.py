@@ -37,8 +37,8 @@ c.local.display_name = "Rod Bûche"
 
 data = c.router.get_announce_app_data(c.local.hash)
 items = msgpack.unpackb(data)
-check("the announce's app data: four items, the tag last", isinstance(items, list) and len(items) == 4
-      and items[3] == "stump:firefly-android/0.6.0.b.53", items)
+check("the announce's app data: the tag fourth (then what FireFly can do: run_packed_text.py)", isinstance(items, list)
+      and len(items) == 5 and items[3] == "stump:firefly-android/0.6.0.b.53", items)
 check("upstream LXMF reads the name as before (Sideband, Columba…)", LXMF.display_name_from_app_data(data) == "Rod Bûche",
       LXMF.display_name_from_app_data(data))
 check("...the stamp cost as before (none)", LXMF.stamp_cost_from_app_data(data) is None)
@@ -56,7 +56,7 @@ RNS.Destination.announce = capture
 c.announce()
 check("the announce FireFly sends carries it", sent and msgpack.unpackb(sent[-1])[3] == c.app_tag, sent[-1:] and msgpack.unpackb(sent[-1]))
 c.local.announce(path_response=True)                # what answering a path request sends
-check("...and so does the answer to a path request", msgpack.unpackb(sent[-1])[-1] == c.app_tag, msgpack.unpackb(sent[-1]))
+check("...and so does the answer to a path request", msgpack.unpackb(sent[-1])[3] == c.app_tag, msgpack.unpackb(sent[-1]))
 RNS.Destination.announce = orig
 
 # Other apps' announces: three items (Sideband), four (a Stump app), FireFly reads the name.
