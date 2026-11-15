@@ -8,17 +8,17 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.73** (sandbox, for Stump 1.0.0-beta.73; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.2-beta.74** (sandbox, for Stump 1.0.0-beta.74; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
-### Unreleased: packed text, more of a chat line in each LoRa packet (with the Stump team)
+### 0.6.2-beta.74: packed text, more of a chat line in each LoRa packet (Stump 1.0.0-beta.74)
 - One LoRa packet holds 295 bytes of LXMF content; the rest of its 500 goes to
   addresses, the signature and the encryption, whatever the message. To and from
   those whose LXMF announce says they read it (a fifth item after FireFly's app tag,
-  `{"z": 1}`: a Stump after 1.0.0-beta.73, another FireFly), a message's text now goes
+  `{"z": 1}`: a Stump from 1.0.0-beta.74, another FireFly), a message's text now goes
   **packed**: about 60% of its bytes for ordinary chat, a sixth for a Stump's `/help`
   (800 bytes over a link, now 134 in one packet). A line too long for one packet
   often fits; a Stump's batch of room lines takes fewer packets. Everyone else
@@ -29,7 +29,7 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - The Store, the UI and every retry keep the text itself; the setting `packed_text`
   (on) turns it off. Test: `run_packed_text`.
 
-### Unreleased: code review (Nov 2026)
+### 0.6.2-beta.74, also: code review (Nov 2026)
 - **A message whose content isn't text was lost.** Any LXMF app can send bytes that
   aren't UTF-8 as a message's content; LXMF gives `None` for those and the
   conversation's store can't hold it: the message never showed, with an exception in

@@ -339,7 +339,7 @@ def with_app_tag(app_data, tag, caps=None):
 
 def reads_packed(app_data):
     """An LXMF announce whose fifth item says its sender reads packed text ({"z": 1}): a Stump
-    since the release after 1.0.0-beta.73, another FireFly."""
+    since 1.0.0-beta.74, another FireFly."""
     try:
         d = msgpack.unpackb(app_data)
         z = d[4].get("z") if isinstance(d, list) and len(d) > 4 and isinstance(d[4], dict) else None
