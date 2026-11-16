@@ -30,7 +30,8 @@ class L:
 api.start(tempfile.mkdtemp(prefix="ff-lauth-"), None, None, L())
 c = api._core
 c.can_reach = lambda addr: True
-gate = lambda k, again=False: json.loads(api.stump_verify(k, again))
+# Entering as the app does: again=True (StumpScreens VerifyGate), then reads with False.
+gate = lambda k, again=True: json.loads(api.stump_verify(k, again))
 announces = []
 c.announce = lambda: announces.append(time.time())
 

@@ -84,7 +84,7 @@ def spy(line, control=False):
 sess.pipe.send = spy
 lines = lambda: [l["body"] for l in json.loads(api.stump_view(K, sess.room or "main"))["lines"]]
 t = time.time()
-g = json.loads(api.stump_verify(K, False))
+g = json.loads(api.stump_verify(K, True))      # entering, as the app does
 if STUMP_REL >= 71:
     check("beta.71+: in at once, no /auth sent", g["state"] == "ok" and "/auth" not in sent, (g, sent))
     time.sleep(3)

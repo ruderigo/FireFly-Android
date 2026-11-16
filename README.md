@@ -8,11 +8,21 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.73** (sandbox, for Stump 1.0.0-beta.73; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.77** (sandbox, for Stump 1.0.0-beta.77; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.1-beta.77: really no /auth over LoRa (Stump 1.0.0-beta.77)
+- **Fix: FireFly still sent /auth over LoRa every time** (builds 69 to 73).
+  Entering a Stump, the app asks the engine with "again" set, and that skipped
+  the check for "already verified, or a beta.71+ Stump over LoRa". Now it's
+  checked whatever "again" says: over LoRa a beta.71+ Stump opens at once, and
+  an older one isn't asked again while it runs on the boot that accepted it.
+  The tests now enter as the app does (run_lora_auth, run_real_lora_proof).
+- Build 77, for Stump 1.0.0-beta.77 (beta.74 to .77: updates, packs, a Stump's
+  identity in a file, the Provisioner; nothing to change in FireFly).
 
 ### 0.6.1-beta.73 (Stump 1.0.0-beta.73)
 - Build 73, for Stump 1.0.0-beta.73: stumpid can no longer be left switched off

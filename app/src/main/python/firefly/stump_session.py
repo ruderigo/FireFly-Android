@@ -806,8 +806,9 @@ class StumpSession:
             return dict(self.verify)
         if st == "failed" and not again:     # entering (or Try again) asks anew; a poll only reads
             return dict(self.verify)
-        if not again and self._already_verified():
-            # Already verified (Nov 13): straight in, no /auth or /hello again.
+        if self._already_verified():
+            # Already verified (Nov 13), or a beta.71+ Stump over LoRa: straight in, no /auth or
+            # /hello. Whatever `again` says: the app enters with again=True (Nov 16 fix).
             self._verify_set("ok")
             return dict(self.verify)
         if self.auth and self.auth.busy:
