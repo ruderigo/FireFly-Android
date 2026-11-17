@@ -114,6 +114,30 @@ c.store.upsert_stump_node(K5, "mesh", LX5, name="Vieille", last_seen=time.time()
 session(K5)
 check("'Beta A' with caps r 1.0.0-beta.70: /auth", gate(K5)["state"] == "verifying" and sent == ["/auth"], sent)
 
+# Stump 1.0.0-beta.79: its QR code carries its release (&r=), a hint until its beacon is heard
+import base64, RNS
+from urllib.parse import quote
+ident = RNS.Identity()
+LX6 = RNS.Destination.hash(ident, "lxmf", "delivery").hex(); K6 = "mesh:" + LX6
+key = base64.urlsafe_b64encode(ident.get_public_key()).decode().rstrip("=")
+link = f"lxmf://{LX6}?stump={quote('Bûche 3')}&key={key}&r={quote('1.0.0-beta.79')}"
+a = stump.parse_address_link(link)
+check("the beta.79 link: name, key and release read", a["stump"] == "Bûche 3" and a["key"] == ident.get_public_key()
+      and a["release"] == "1.0.0-beta.79", a)
+check("an unreadable r= is ignored", stump.parse_address_link(link.replace("r=1.0.0-beta.79", "r=whenever"))["release"] is None)
+check("no r= (a Stump before beta.79): no release", stump.parse_address_link(link.split("&r=")[0])["release"] is None)
+c.address_add(link, "stump")
+check("added from the code: its release kept", c.store.stump_node(K6).get("release") == "1.0.0-beta.79", c.store.stump_node(K6))
+sent = []
+session(K6)
+check("entering before any beacon: no /auth (the code's release)", gate(K6)["state"] == "ok" and sent == [], sent)
+c._on_stump_beacon(LX6, "Bûche 3", "Beta A", [], boot="q1", release="1.0.0-beta.70")
+check("its beacon has the last word (says beta.70)", c.store.stump_node(K6).get("release") == "1.0.0-beta.70")
+restart_firefly(K6)
+check("...then /auth as for any beta.70", gate(K6)["state"] == "verifying" and sent == ["/auth"], sent)
+c.address_add(link, "stump")
+check("scanning the code again doesn't overwrite what the beacon said", c.store.stump_node(K6).get("release") == "1.0.0-beta.70")
+
 # a beta.71 Stump not entered restarts: it stays verified (nothing to redo)
 LX3 = "c3" * 16; K3 = "mesh:" + LX3
 c.store.upsert_stump_node(K3, "mesh", LX3, name="Souche", last_seen=time.time(), auth="ok")

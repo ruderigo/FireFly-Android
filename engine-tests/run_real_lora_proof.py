@@ -72,6 +72,21 @@ print("     path to the Stump known before sending:", wait(lambda: RNS.Transport
       "(LXMF asks for one itself if not)", flush=True)
 
 K = "mesh:" + LX
+# Its QR code's link (the /address page), as a phone would scan it: from beta.79 with &r=.
+import re as _re, urllib.request as _ur
+try:
+    page = _ur.urlopen(f"http://{IP}:{PORT}/address", timeout=10).read().decode("utf-8", "replace")
+except Exception as e:
+    page = ""
+    print("     /address:", e, flush=True)
+m = _re.search(r"(lxmf://[0-9a-f]{32}\?[^'\"<\s]+)", page)
+link = m.group(1).replace("&amp;", "&") if m else None
+print("     its QR link:", (link or "none")[:60] + "…" + ((link or "")[-24:]), flush=True)
+a = stump.parse_address_link(link) if link else None
+check("FireFly reads the Stump's QR link: its address and key",
+      a is not None and a["address"] == LX and a["key"] is not None and not a["key_bad"], a)
+if STUMP_REL >= 79:
+    check("...and from beta.79 its release (&r=)", a is not None and stump.release_beta(a["release"]) == STUMP_REL, a and a["release"])
 check("FireFly hears the real Stump's beacon", wait(lambda: LX in c.stumps, 60), list(c.stumps)[:3])
 print("     the Stump's release:", c.stumps.get(LX), "| boot:", c.boots.get(LX), flush=True)
 check("...and introduces itself (its announce, so the Stump has its key)", c.last_announce > 0)

@@ -497,6 +497,9 @@ class Core:
                 RNS.Identity.remember(None, bytes.fromhex(h), ident.get_public_key(), None)
         if kind == "stump":
             r = self.add_stump_address(h, name=a["stump"] or None)
+            if a.get("release") and not (self.store.stump_node(mesh_key(h)) or {}).get("release"):
+                # Its release from the code (beta.79): only until a beacon of its own says.
+                self.store.upsert_stump_node(mesh_key(h), "mesh", h, release=a["release"])
             r["kind"] = "stump"
         elif kind == "person":
             r = {"kind": "person", "peer": self.add_contact(h), "new": self.store.peer(h) is None}

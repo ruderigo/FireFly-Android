@@ -256,8 +256,10 @@ def parse_address_link(text):
     """What a scanned code, a paste or a tapped link says. -> None, or {"address": 32 hex,
     "link": it was a link (lxmf://…), "stump": the name given by stump= (None: not said to be
     a Stump), "key": the 64-byte public key given by key= (None: none), "key_bad": key= was
-    there but isn't 64 bytes of base64url}.
-    Stump 1.0.0-beta.52: lxmf://<address>?stump=<name, %-encoded UTF-8>&key=<base64url>."""
+    there but isn't 64 bytes of base64url, "release": r= (None: none or unreadable)}.
+    Stump 1.0.0-beta.52: lxmf://<address>?stump=<name, %-encoded UTF-8>&key=<base64url>;
+    from beta.79 also &r=<release, %-encoded> (its beacon's "r"): a hint only, the key proves
+    the address, not the release, and its signed beacon has the last word."""
     import base64
     from urllib.parse import parse_qs, unquote
     raw = "".join(str(text or "").split())
@@ -265,6 +267,7 @@ def parse_address_link(text):
     if not m:
         return None
     out = {"address": m.group(1), "link": "://" in raw, "stump": None, "key": None, "key_bad": False,
+           "release": None,
            "scheme": raw.split("://", 1)[0].lower() if "://" in raw else None}
     # lxma://<address>:<public key> (Columba, MeshChatX, the T-Deck LXMF Messenger): the key
     # after the colon, as hex (128) or base64url (86).
@@ -286,6 +289,9 @@ def parse_address_link(text):
         if "stump" in params:
             name = unquote(params["stump"][0]).strip()
             out["stump"] = "".join(ch for ch in name if ch.isprintable())[:40]
+        if "r" in params:
+            r = params["r"][0].strip()
+            out["release"] = r if len(r) <= 40 and release_beta(r) is not None else None
         if "key" in params:
             key = _key_bytes(params["key"][0])
             if key is not None:

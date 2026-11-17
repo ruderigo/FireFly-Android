@@ -26,6 +26,13 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
 - FireFly announces right before its first message to a Stump in a run (unless
   it just did): an announce at start-up can go out before the link is up.
 - Build 79: your phone has 78 (build 73's code, renumbered to install over 77).
+- **A Stump's QR code gives its release** (Stump 1.0.0-beta.79: `&r=`): added
+  from the code, it opens without /auth over LoRa before any beacon is heard.
+  A hint only: its beacon has the last word, and scanning again never
+  overwrites what a beacon said. Checked against the real Stump's /address link.
+- No keepalive: from Stump beta.79 a listening FireFly stays in its room through
+  the delivery proofs it already sends; after 5 quiet minutes, entering's
+  /names puts it back.
 
 ### 0.6.1-beta.77: really no /auth over LoRa (Stump 1.0.0-beta.77)
 - **Fix: FireFly still sent /auth over LoRa every time** (builds 69 to 73).
