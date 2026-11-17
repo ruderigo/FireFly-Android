@@ -146,4 +146,11 @@ object Engine {
 }
 
 fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+
+/**
+ * A name from the engine's JSON as text: "" when it's missing or JSON null. optString turns a
+ * JSON null into the text "null", which then showed as a Stump's name (Nov 17, with the Stump
+ * team: a /node.json without a name). Every screen reads names through this.
+ */
+fun JSONObject.nameText(key: String = "name"): String = if (!has(key) || isNull(key)) "" else optString(key)
 fun JSONArray.strings(): List<String> = (0 until length()).map { getString(it) }

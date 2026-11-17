@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import io.github.ruderigo.firefly.engine.Engine
 import io.github.ruderigo.firefly.engine.objects
 import io.github.ruderigo.firefly.net.WifiDiscovery
@@ -107,11 +108,11 @@ internal fun StumpFound(s: JSONObject, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             val addr = s.optString("base").removePrefix("http://").removePrefix("https://")
-            Text(s.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: addr,
+            Text(s.nameText().takeIf { it.isNotBlank() && it != "null" } ?: addr,
                 style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val chain = s.optJSONObject("chain")
             Text(listOfNotNull(
-                addr.takeIf { s.optString("name").isNotBlank() && s.optString("name") != "null" },
+                addr.takeIf { s.nameText().isNotBlank() && s.nameText() != "null" },
                 when (s.optString("found_by")) {
                     "heard" -> stringResource(R.string.find_by_heard)
                     "sweep" -> stringResource(R.string.find_by_sweep)
@@ -170,7 +171,7 @@ internal fun LoraRow(n: JSONObject, onOpen: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically) {
         Bars(if (link.isNull("bars") || !link.has("bars")) null else link.optInt("bars"), Modifier.padding(end = 10.dp))
         Column(Modifier.weight(1f)) {
-            Text(n.optString("name").ifBlank { key.removePrefix("mesh:").take(12) }, style = MaterialTheme.typography.bodyLarge,
+            Text(n.nameText().ifBlank { key.removePrefix("mesh:").take(12) }, style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(listOfNotNull(
                 if (link.isNull("hops") || !link.has("hops")) null else stringResource(R.string.hops, link.optInt("hops")),

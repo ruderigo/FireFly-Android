@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import io.github.ruderigo.firefly.engine.Engine
 import io.github.ruderigo.firefly.engine.objects
 import io.github.ruderigo.firefly.net.WifiDiscovery
@@ -179,7 +180,7 @@ fun HotspotsPopup(onDismiss: () -> Unit, onSearch: () -> Unit) {
         if (p.optBoolean("stump")) {
             Engine.call("remember_stump_ssid", joined.ssid)
             val found = JSONObject().put("base", p.optString("base").ifBlank { "http://$gw" })
-                .put("name", p.optString("name")).put("lxmf", p.optString("lxmf"))
+                .put("name", p.nameText()).put("lxmf", p.optString("lxmf"))
             Engine.obj("stumps_add_found", JSONArray().put(found).toString())
             added = joined.ssid
             Toast.makeText(ctx, ctx.getString(R.string.find_popup_added, 1), Toast.LENGTH_SHORT).show()

@@ -80,7 +80,7 @@ class EngineService : LifecycleService() {
         val (title, text, tag) = when (e.optString("type")) {
             "message" -> {
                 open.putExtra(MainActivity.EXTRA_OPEN, "chat").putExtra(MainActivity.EXTRA_PEER, e.optString("peer"))
-                Triple(e.optString("name").ifBlank { e.optString("peer").take(8) },
+                Triple(e.nameText().ifBlank { e.optString("peer").take(8) },
                     if (e.optBoolean("audio")) "▶ " + getString(R.string.voice_note) else e.optString("text"),
                     notificationTag(e.optString("peer")))
             }

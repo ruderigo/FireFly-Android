@@ -14,6 +14,20 @@ Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
+### 0.6.1-beta.80, continued: the Local network link answers on the Wi-Fi (Nov 17)
+- **The Local network link's sockets are bound to the Wi-Fi** (asked by the
+  Stump team). On a Wi-Fi with no internet (a Stump's hotspot, the kit's
+  Wi-Fi) Android sent that link's packets over mobile data: "Network is
+  unreachable" on every send. The phone was heard there but couldn't answer,
+  so computer Stumps routed to it through a link that never delivered (the
+  Mac on the kit; Stump beta.80 recovers, after two lost messages each time).
+  Each socket Reticulum's AutoInterface makes now goes through Android's
+  Network.bindSocket on the Wi-Fi network; nothing else changes. Test:
+  run_auto_wifi_bind.
+- **No "null" for a missing name**: every screen reads names through one
+  helper that takes a JSON null as no name (a /node.json without a name showed
+  "null"; Stump beta.81 also stops sending it).
+
 ### 0.6.1-beta.80 (Stump 1.0.0-beta.80)
 - Build 80, for Stump 1.0.0-beta.80 (beta.78: Bavard; beta.79: the release in
   the QR code, presence without a keepalive; beta.80: a route that doesn't

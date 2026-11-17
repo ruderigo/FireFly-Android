@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import io.github.ruderigo.firefly.engine.Engine
 import io.github.ruderigo.firefly.engine.objects
 import io.github.ruderigo.firefly.radio.BlePairing
@@ -108,7 +109,7 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                 paired.forEach { d ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(d.optString("name"), style = MaterialTheme.typography.bodyLarge)
+                            Text(d.nameText(), style = MaterialTheme.typography.bodyLarge)
                             Text(d.optString("address"), style = MaterialTheme.typography.labelSmall)
                         }
                         // The one in use says so; any other can be switched to.
@@ -150,7 +151,7 @@ fun NetworkScreen(status: JSONObject, go: (Route) -> Unit) {
                 Box(Modifier.size(8.dp).clip(Small).background(if (i.optBoolean("online")) Amber.Ember else Amber.Dim))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(i.optString("name"), style = MaterialTheme.typography.labelLarge.copy(fontWeight = null))
+                    Text(i.nameText(), style = MaterialTheme.typography.labelLarge.copy(fontWeight = null))
                     i.optString("error").takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall.copy(color = Amber.Error)) }
                 }
                 Text("↓ %s  ↑ %s".format(bytes(i.optLong("rx")), bytes(i.optLong("tx"))), style = MaterialTheme.typography.labelSmall)
@@ -220,7 +221,7 @@ fun PairScreen(back: () -> Unit) {
 @Composable
 private fun PropagationSummary(p: JSONObject, go: (Route) -> Unit) {
     val node = p.optString("node").takeIf { it.isNotBlank() && it != "null" }
-    val name = p.optString("name").takeIf { it.isNotBlank() && it != "null" }
+    val name = p.nameText().takeIf { it.isNotBlank() && it != "null" }
     val stump = p.optString("stump").takeIf { it.isNotBlank() && it != "null" }
     KeyValue(stringResource(R.string.node), when {
         node == null -> stringResource(if (p.optString("mode") == "off") R.string.prop_mode_off else R.string.none_heard)
@@ -279,7 +280,7 @@ fun PropagationScreen(back: () -> Unit) {
                     if (n.optBoolean("waiting")) add(stringResource(R.string.prop_waiting))
                     else if (!enabled) add(stringResource(R.string.prop_switched_off))
                 }.joinToString("  ")
-                val title = (n.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: stringResource(R.string.propagation)) +
+                val title = (n.nameText().takeIf { it.isNotBlank() && it != "null" } ?: stringResource(R.string.propagation)) +
                     if (!n.isNull("stump") && n.optString("stump").isNotBlank()) "  · " + stringResource(R.string.find_tag_yes) else ""
                 ChoiceRow(title, details, mode == "manual" && n.optBoolean("selected"), selectedHint = n.optBoolean("selected")) {
                     Engine.fire("use_propagation_node", n.optString("hash"))

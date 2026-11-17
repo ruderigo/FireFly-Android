@@ -6,6 +6,7 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.ParcelFileDescriptor
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -79,6 +80,23 @@ class WifiHttp(context: Context) {
         gateway.value = lp?.routes?.firstOrNull { it.isDefaultRoute && it.gateway is Inet4Address }?.gateway?.hostAddress
         local.value = lp?.linkAddresses?.firstOrNull { it.address is Inet4Address }
             ?.let { it.address.hostAddress + "/" + it.prefixLength }
+    }
+
+    /**
+     * Binds one socket of Reticulum's Local network link (AutoInterface; its file descriptor,
+     * from Python) to the Wi-Fi network (Nov 17, with the Stump team). Unbound, on a Wi-Fi with
+     * no internet (a Stump's hotspot, the kit's Wi-Fi) Android sent its packets over mobile
+     * data: "Network is unreachable". The phone was heard on the Wi-Fi but couldn't answer
+     * there, and computer Stumps routed to it through that link. The descriptor is duplicated,
+     * bound (the mark is on the socket, so the original has it too) and the copy closed.
+     * -> true when bound; false with no Wi-Fi up, or if Android refused.
+     */
+    fun bindSocketToWifi(fd: Int): Boolean {
+        val n = wifi ?: return false
+        return runCatching {
+            ParcelFileDescriptor.fromFd(fd).use { n.bindSocket(it.fileDescriptor) }
+            true
+        }.getOrDefault(false)
     }
 
     fun request(method: String, url: String, headersJson: String?, body: ByteArray?, timeoutMs: Int): HttpResult {

@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import io.github.ruderigo.firefly.engine.Engine
 import io.github.ruderigo.firefly.engine.objects
 import io.github.ruderigo.firefly.net.WifiDiscovery
@@ -120,7 +121,7 @@ fun FindStumpsPopup(onDismiss: () -> Unit) {
                         Checkbox(checked = k in ticked, onCheckedChange = { on -> ticked = if (on) ticked + k else ticked - k },
                             colors = CheckboxDefaults.colors(checkedColor = Amber.Ember, uncheckedColor = Amber.Muted))
                         Column(Modifier.weight(1f)) {
-                            Text(f.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: f.optString("base"),
+                            Text(f.nameText().takeIf { it.isNotBlank() && it != "null" } ?: f.optString("base"),
                                 style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(listOfNotNull(f.optString("base").substringAfter("://").trimEnd('/'),
                                 f.optString("release").takeIf { it.isNotBlank() && it != "null" }).joinToString(" · "),

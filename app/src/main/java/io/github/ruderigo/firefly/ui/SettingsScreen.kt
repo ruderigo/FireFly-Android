@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import io.github.ruderigo.firefly.audio.Codec2
 import io.github.ruderigo.firefly.audio.Opus
 import io.github.ruderigo.firefly.engine.Engine
@@ -189,7 +190,7 @@ fun SettingsScreen(go: (Route) -> Unit = {}) {
                 blockedPeople.forEach { b ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(b.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: shortHash(b.optString("hash")),
+                            Text(b.nameText().takeIf { it.isNotBlank() && it != "null" } ?: shortHash(b.optString("hash")),
                                 style = MaterialTheme.typography.bodyLarge)
                             Text(shortHash(b.optString("hash")), style = MaterialTheme.typography.labelSmall)
                         }

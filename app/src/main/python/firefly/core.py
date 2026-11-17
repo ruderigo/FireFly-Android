@@ -191,6 +191,7 @@ class Core:
         from RNS.Interfaces import TCPInterface
         wanted = []
         if self.settings["auto_interface"]:
+            _bind_auto_sockets(self.http)
             wanted.append(("Local network", _auto_interface_class(), {"name": "Local network"}))
         for i, peer in enumerate(self.settings["tcp_peers"]):
             host, _, port = str(peer).strip().rpartition(":")
@@ -1398,6 +1399,50 @@ def _clean_address(hex_addr):
     if len(h) != 32 or any(c not in "0123456789abcdef" for c in h):
         raise ValueError("an LXMF address is 32 hex characters")
     return h
+
+
+def _bind_auto_sockets(http):
+    """Each socket AutoInterface makes, bound to the Wi-Fi network (Android: the http bridge's
+    bindSocketToWifi). Unbound, on a Wi-Fi with no internet Android sent the Local network
+    link's packets over mobile data ("Network is unreachable"): the phone was heard on the
+    Wi-Fi but couldn't answer there, and computer Stumps routed to it that way (Stump
+    1.0.0-beta.80 recovers, after two lost messages each time). Only that module's sockets: the
+    name `socket` in RNS.Interfaces.AutoInterface becomes a stand-in whose socket() binds what
+    it makes; everything else is the real module. No-op without a bridge that binds (desktop,
+    tests). Its listeners (socketserver) only receive, which needs no binding; the replies and
+    delivery proofs go out through the sockets bound here."""
+    binder = getattr(http, "bindSocketToWifi", None) if http is not None else None
+    if binder is None:
+        return False
+    import RNS.Interfaces.AutoInterface as auto
+    if getattr(auto.socket, "_firefly_wifi", False):
+        auto.socket.binder = binder
+        return True
+    real = auto.socket
+
+    class _WifiSockets:
+        _firefly_wifi = True
+
+        def __init__(self):
+            self.binder, self.bound, self.refused = binder, 0, 0
+
+        def __getattr__(self, name):
+            return getattr(real, name)
+
+        def socket(self, *args, **kwargs):
+            s = real.socket(*args, **kwargs)
+            try:
+                if self.binder(s.fileno()):
+                    self.bound += 1
+                else:
+                    self.refused += 1
+            except Exception as e:
+                self.refused += 1
+                RNS.log(f"Local network socket not bound to the Wi-Fi: {e}", RNS.LOG_DEBUG)
+            return s
+
+    auto.socket = _WifiSockets()
+    return True
 
 
 def _auto_interface_class():

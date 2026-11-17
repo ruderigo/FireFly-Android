@@ -36,6 +36,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -80,10 +81,10 @@ fun StumpsScreen(go: (Route) -> Unit) {
     var removing by remember { mutableStateOf<JSONObject?>(null) }
     // A row may stand for one Stump on LoRa and Wi-Fi: hide or remove acts on both.
     fun keysOf(n: JSONObject) = listOf(n.optString("key")) + (n.optJSONArray("others")?.objects()?.map { it.optString("key") } ?: emptyList())
-    acting?.let { n -> StumpActions(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { acting = null },
+    acting?.let { n -> StumpActions(n.nameText().ifBlank { n.optString("address") }, onDismiss = { acting = null },
         onHide = { keysOf(n).forEach { Engine.fire("stump_hide", it) }; acting = null },
         onRemove = { removing = n; acting = null }) }
-    removing?.let { n -> ConfirmRemoveStump(n.optString("name").ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
+    removing?.let { n -> ConfirmRemoveStump(n.nameText().ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
         keysOf(n).forEach { Engine.fire("stump_remove", it) }; removing = null } }
     androidx.compose.material3.pulltorefresh.PullToRefreshBox(isRefreshing = refreshing, onRefresh = { refreshAll() },
         modifier = Modifier.fillMaxSize()) {
@@ -104,7 +105,7 @@ fun StumpsScreen(go: (Route) -> Unit) {
                     contentDescription = stringResource(if (alive) R.string.stump_online else R.string.stump_not_answering),
                     tint = if (alive) Amber.Ember else Amber.Dim, modifier = Modifier.padding(end = 12.dp).size(26.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(n.optString("name").ifBlank { n.optString("address") }, style = MaterialTheme.typography.titleMedium,
+                    Text(n.nameText().ifBlank { n.optString("address") }, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(buildList {
                         add(if (both) stringResource(R.string.via_both) else if (mesh) stringResource(R.string.via_mesh)
@@ -193,12 +194,12 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
     // Into a Stump only once it knows who we are: FireFly verifies itself (Wi-Fi and LoRa) and
     // the room waits behind a popup until it's done, or the user chooses to go in anyway.
     var entered by remember(openedAs) { mutableStateOf(false) }
-    if (!entered) VerifyGate(key, view.optString("name").ifBlank { key.substringAfter(":") }, mesh,
+    if (!entered) VerifyGate(key, view.nameText().ifBlank { key.substringAfter(":") }, mesh,
         onEnter = { entered = true }, onBack = back)
     val threads = view.optJSONArray("threads")?.objects() ?: emptyList()
     val unread = threads.sumOf { it.optInt("unread") }
     Column(Modifier.fillMaxSize()) {
-        TopBar(view.optString("name").ifBlank { key.substringAfter(":") },
+        TopBar(view.nameText().ifBlank { key.substringAfter(":") },
             listOfNotNull(
                 if (mesh) stringResource(R.string.via_mesh) else stringResource(R.string.via_wifi),
                 view.optString("nick").takeIf { it.isNotBlank() && it != "null" }?.let { stringResource(R.string.you_are, it) },
@@ -220,7 +221,7 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
                 },
             ).joinToString("  "), back) {
             var menuRemove by remember { mutableStateOf(false) }
-            if (menuRemove) ConfirmRemoveStump(view.optString("name").ifBlank { key.substringAfter(":") },
+            if (menuRemove) ConfirmRemoveStump(view.nameText().ifBlank { key.substringAfter(":") },
                 onDismiss = { menuRemove = false }) { Engine.fire("stump_remove", key); menuRemove = false; back() }
             when (auth) {
                 "ok" -> Text(stringResource(R.string.verified), style = MaterialTheme.typography.labelMedium.copy(color = Amber.Ember))
@@ -298,7 +299,7 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
         var bounce by remember(key) { mutableStateOf<String?>(null) }
         var notice by remember(key) { mutableStateOf<String?>(null) }
         var busy by remember(key) { mutableStateOf(false) }
-        val stumpName = view.optString("name").ifBlank { key.substringAfter(":") }
+        val stumpName = view.nameText().ifBlank { key.substringAfter(":") }
         val texts = mapOf("lora" to stringResource(R.string.tab_not_over_lora), "no_wifi" to stringResource(R.string.tab_no_wifi),
             "offline" to stringResource(R.string.stump_offline, stumpName),
             "board_off" to stringResource(R.string.tab_board_off), "files_off" to stringResource(R.string.tab_files_off))
@@ -424,9 +425,9 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
     LaunchedEffect(joining) { blink = true; while (joining != null) { delay(450); blink = !blink } }
     Row(Modifier.fillMaxWidth().background(Amber.Sidebar).horizontalScroll(rememberScrollState()).padding(8.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        val names = (rooms.map { it.optString("name") } + here).filter { it.isNotBlank() }.distinct()
+        val names = (rooms.map { it.nameText() } + here).filter { it.isNotBlank() }.distinct()
         names.forEach { r ->
-            val info = rooms.firstOrNull { it.optString("name") == r }
+            val info = rooms.firstOrNull { it.nameText() == r }
             val tier = info?.optString("tier")?.takeIf { it == "minted" || it == "hybrid" }
             val target = joining != null && stumpSameRoom(r, joining)
             Text("#$r" + (tier?.let { " ·$it" } ?: "") + (info?.optInt("count", -1)?.takeIf { it >= 0 }?.let { " $it" } ?: "") +
@@ -601,7 +602,7 @@ fun DmScreen(key: String, nick: String, back: () -> Unit) {
         if (blocking) ConfirmStumpBlock(nick, onDismiss = { blocking = false }) {
             Engine.fire("stump_block_nick", key, nick); blocking = false; back()
         }
-        TopBar(nick, stringResource(R.string.dm_via, node.optString("name")), back) {
+        TopBar(nick, stringResource(R.string.dm_via, node.nameText()), back) {
             OverflowMenu(listOf(
                 stringResource(R.string.delete) to { deleting = true },
                 stringResource(R.string.block) to { blocking = true }))

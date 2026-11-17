@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.ruderigo.firefly.R
+import io.github.ruderigo.firefly.engine.nameText
 import io.github.ruderigo.firefly.engine.Engine
 import io.github.ruderigo.firefly.audio.Codec2
 import io.github.ruderigo.firefly.audio.VoiceBubble
@@ -52,7 +53,7 @@ fun ChatsScreen(go: (Route) -> Unit) {
     var blocking by remember { mutableStateOf<Pair<String, String>?>(null) }          // address, name
     choosing?.let { (p, conv) ->
         val hash = p.optString(if (conv) "peer" else "hash")
-        val who = p.optString("name").ifBlank { shortHash(hash) }
+        val who = p.nameText().ifBlank { shortHash(hash) }
         PersonActions(who, onDismiss = { choosing = null },
             onDelete = { if (conv) deleting = p else forgetting = p; choosing = null },
             onBlock = { blocking = hash to who; choosing = null })
@@ -65,14 +66,14 @@ fun ChatsScreen(go: (Route) -> Unit) {
         }
     }
     forgetting?.let { p ->
-        val who = p.optString("name").ifBlank { shortHash(p.optString("hash")) }
+        val who = p.nameText().ifBlank { shortHash(p.optString("hash")) }
         ConfirmDialog(stringResource(R.string.forget_peer_title, who), stringResource(R.string.forget_peer_text),
             stringResource(R.string.stump_remove), onDismiss = { forgetting = null }, onConfirm = {
                 Engine.fire("delete_conversation", p.optString("hash")); forgetting = null
             })
     }
     deleting?.let { c ->
-        val who = c.optString("name").ifBlank { shortHash(c.optString("peer")) }
+        val who = c.nameText().ifBlank { shortHash(c.optString("peer")) }
         ConfirmDialog(stringResource(R.string.delete_conv_title), stringResource(R.string.delete_conv_text, who),
             stringResource(R.string.delete), onDismiss = { deleting = null }, onConfirm = {
                 Engine.fire("delete_conversation", c.optString("peer"))
@@ -107,7 +108,7 @@ fun ChatsScreen(go: (Route) -> Unit) {
             Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Chat(c.optString("peer"))) }, onLongClick = { choosing = c to true }),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(c.optString("name").ifBlank { shortHash(c.optString("peer")) }, style = MaterialTheme.typography.titleMedium,
+                    Text(c.nameText().ifBlank { shortHash(c.optString("peer")) }, style = MaterialTheme.typography.titleMedium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text((if (c.optInt("outgoing") == 1) stateGlyph(c.optString("state")) + " " else "") +
                         (if (!c.isNull("audio_mode")) "▶ " + stringResource(R.string.voice_note) else c.optString("content")),
@@ -126,7 +127,7 @@ fun ChatsScreen(go: (Route) -> Unit) {
         }
         items(nearby, key = { "p" + it.optString("hash") }) { p ->
             Row(Modifier.fillMaxWidth().rowPress(onClick = { go(Route.Chat(p.optString("hash"))) }, onLongClick = { choosing = p to false })) {
-                Text(p.optString("name").ifBlank { shortHash(p.optString("hash")) }, style = MaterialTheme.typography.bodyLarge,
+                Text(p.nameText().ifBlank { shortHash(p.optString("hash")) }, style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f), maxLines = 1)
                 Text(hopsLabel(p), style = MaterialTheme.typography.labelSmall)
             }
@@ -154,21 +155,21 @@ fun ConversationScreen(peer: String, back: () -> Unit, go: (Route) -> Unit = {})
     Column(Modifier.fillMaxSize()) {
         var confirmDelete by remember { mutableStateOf(false) }
         var confirmBlock by remember { mutableStateOf(false) }
-        if (confirmBlock) ConfirmBlock(info.optString("name").ifBlank { shortHash(peer) }, onDismiss = { confirmBlock = false }) {
+        if (confirmBlock) ConfirmBlock(info.nameText().ifBlank { shortHash(peer) }, onDismiss = { confirmBlock = false }) {
             Engine.fire("block", peer)
             NotificationManagerCompat.from(ctx).cancel(EngineService.notificationTag(peer))
             confirmBlock = false
             back()
         }
         if (confirmDelete) ConfirmDialog(stringResource(R.string.delete_conv_title),
-            stringResource(R.string.delete_conv_text, info.optString("name").ifBlank { shortHash(peer) }),
+            stringResource(R.string.delete_conv_text, info.nameText().ifBlank { shortHash(peer) }),
             stringResource(R.string.delete), onDismiss = { confirmDelete = false }, onConfirm = {
                 Engine.fire("delete_conversation", peer)
                 NotificationManagerCompat.from(ctx).cancel(EngineService.notificationTag(peer))
                 confirmDelete = false
                 back()
             })
-        TopBar(info.optString("name").ifBlank { shortHash(peer) },
+        TopBar(info.nameText().ifBlank { shortHash(peer) },
             listOfNotNull(shortHash(peer), if (info.isNull("hops")) null else hopsLabel(info)).joinToString("  "), back) {
             OverflowMenu(listOf(stringResource(R.string.delete_conv_menu) to { confirmDelete = true },
                 stringResource(R.string.block) to { confirmBlock = true }))
