@@ -8,11 +8,17 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.80** (sandbox, for Stump 1.0.0-beta.80; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.81** (sandbox, for Stump 1.0.0-beta.81; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.1-beta.81 (Stump 1.0.0-beta.81)
+- Build 81, for Stump 1.0.0-beta.81 (a board answers path requests from what it
+  heard; /node.json never sends a null name; a client put back in its room
+  keeps its name, so FireFly switches rooms on its own join line). Nothing to
+  change in FireFly; the real-Stump tests pass against it.
 
 ### 0.6.1-beta.80, continued: the Local network link answers on the Wi-Fi (Nov 17)
 - **The Local network link's sockets are bound to the Wi-Fi** (asked by the
