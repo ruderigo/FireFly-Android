@@ -8,11 +8,17 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.77** (sandbox, for Stump 1.0.0-beta.77; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.1-beta.80** (sandbox, for Stump 1.0.0-beta.80; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.1-beta.80 (Stump 1.0.0-beta.80)
+- Build 80, for Stump 1.0.0-beta.80 (beta.78: Bavard; beta.79: the release in
+  the QR code, presence without a keepalive; beta.80: a route that doesn't
+  deliver is set aside, the Mac's case on the kit). Nothing to change in
+  FireFly; the real-Stump tests pass against it.
 
 ### 0.6.1-beta.77, build 79: entering over LoRa says "I'm here" (Stump 1.0.0-beta.77)
 - **Fix: with no /auth over LoRa, rooms stayed empty and commands seemed dead**
