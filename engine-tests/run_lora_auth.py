@@ -33,11 +33,13 @@ c.can_reach = lambda addr: True
 # Entering as the app does: again=True (StumpScreens VerifyGate), then reads with False.
 gate = lambda k, again=True: json.loads(api.stump_verify(k, again))
 announces = []
-c.announce = lambda: announces.append(time.time())
+def _announce():
+    announces.append(time.time()); c.last_announce = time.time()
+c.announce = _announce
 
 def session(k):
     s = c.session(k)
-    s.pipe.send = lambda line, control=False: sent.append(line)
+    s.pipe.send = lambda line, control=False: sent.append(line) if line != "/names" else None   # (entering says "here": run_lora_here)
     return s
 def restart_firefly(k):
     c.sessions.pop(k).stop()

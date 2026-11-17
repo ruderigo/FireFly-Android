@@ -351,8 +351,12 @@ class Core:
             return
         self.met_this_run.add(lxmf_hex)
         if time.time() - self.last_announce > INTRODUCE_AFTER_S:
-            self.last_announce = time.time()            # (claimed now: two beacons at once, one announce)
-            threading.Thread(target=self.announce, daemon=True, name="introduce").start()
+            # Now, not in a thread: queued before anything we send it, so our first message
+            # checks out (Nov 17: in a thread, a quick first message went out before it).
+            try:
+                self.announce()
+            except Exception as e:
+                RNS.log(f"announce for {lxmf_hex[:8]} failed: {e}", RNS.LOG_WARNING)
 
     def lora_signed(self, lxmf_hex):
         """Does this Stump (1.0.0-beta.71+) take a LoRa sender's checked LXMF signature as full
@@ -761,7 +765,10 @@ class Core:
             # only has once it has heard an announce. Announce just before the
             # first message of the session, so it isn't flagged "unverified".
             self._introduced.add(peer_hex)
-            if time.time() - self.last_announce > INTRODUCE_AFTER_S:
+            # A Stump: right before its first message, unless we announced just now (an announce
+            # at start-up can go out before the link to it is up, Nov 17: it then took our
+            # first message as unverified).
+            if time.time() - self.last_announce > (2 if peer_hex in self.stumps else INTRODUCE_AFTER_S):
                 self.announce()
                 time.sleep(1.0)
         dest_hash = bytes.fromhex(peer_hex)

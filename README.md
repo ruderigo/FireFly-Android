@@ -14,6 +14,19 @@ Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
+### 0.6.1-beta.77, build 79: entering over LoRa says "I'm here" (Stump 1.0.0-beta.77)
+- **Fix: with no /auth over LoRa, rooms stayed empty and commands seemed dead**
+  (build 77). A Stump keeps a LoRa client in its room 5 minutes after its last
+  message, then stops sending it the room; the /auth sent on entering used to
+  renew that. Now entering sends /names when FireFly's been quiet 4 minutes or
+  more: one message instead of /auth's four, and the full list. If the Stump
+  had let FireFly go, its answer says where it has it, and FireFly shows that
+  room. Checked with a real Stump whose timeout was shortened (run_lora_here,
+  run_real_lora_proof).
+- FireFly announces right before its first message to a Stump in a run (unless
+  it just did): an announce at start-up can go out before the link is up.
+- Build 79: your phone has 78 (build 73's code, renumbered to install over 77).
+
 ### 0.6.1-beta.77: really no /auth over LoRa (Stump 1.0.0-beta.77)
 - **Fix: FireFly still sent /auth over LoRa every time** (builds 69 to 73).
   Entering a Stump, the app asks the engine with "again" set, and that skipped

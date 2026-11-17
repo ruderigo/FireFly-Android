@@ -29,7 +29,7 @@ android {
     applicationId = "io.github.ruderigo.firefly"
     minSdk = 26
     targetSdk = 36
-    versionCode = 77
+    versionCode = 79   // (the phone has 78: build 73's code renumbered to install over 77)
     versionName = "0.6.1-beta.77"
     ndk { abiFilters += abis }
   }

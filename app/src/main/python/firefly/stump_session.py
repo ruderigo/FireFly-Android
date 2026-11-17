@@ -69,6 +69,7 @@ class MeshPipe:
 
     def __init__(self, core, node_hex):
         self.core, self.node_hex = core, node_hex
+        self.sent_at = 0.0                  # our last message to this Stump (it keeps us present 5 min)
 
     @property
     def address(self): return self.node_hex
@@ -78,6 +79,7 @@ class MeshPipe:
 
     def send(self, line, control=False):
         """Returns the LXMF message id, so room lines and DMs can show delivery to the node."""
+        self.sent_at = time.time()
         if control:
             # /auth must stay one packet: empty title, no fields, opportunistic, never propagated.
             if stump_size(line) > stump.SINGLE_PACKET_LIMIT:
@@ -478,6 +480,7 @@ class StumpSession:
         self.names_asked_at = 0.0
         self.names_quiet = set()        # rooms whose next /names answer isn't shown
         self.local_users = []           # the last Wi-Fi poll's people (this Stump's only)
+        self.here_room = None           # entering over LoRa: the room our /names should find us in
         # Entering a Stump waits for this (the "verifying…" popup): FireFly proves who it is to
         # every Stump, over Wi-Fi (/hello or /auth) and LoRa (/auth), before the room opens.
         # "idle", "verifying", "ok", "not_needed" (a Stump without /auth), "failed" (+ detail).
@@ -800,6 +803,8 @@ class StumpSession:
         """Entering this Stump: prove who we are unless it's done (or on its way). `again`:
         after a failure (Try again). -> the verify state."""
         st = self.verify["state"]
+        if again:
+            self._here()                        # entering: over LoRa, tell the Stump we're here
         if st in ("ok", "not_needed"):
             return dict(self.verify)
         if st == "verifying" and time.time() - self.verify["at"] < stump.AUTH_WINDOW_S + 40:
@@ -816,6 +821,23 @@ class StumpSession:
         self._verify_set("verifying")
         self.greet(force=True)
         return dict(self.verify)
+
+    # A Stump keeps a LoRa client in its room 5 minutes after its last message (rrc_mesh
+    # PEER_TIMEOUT), then stops sending it the room. /auth on entering used to renew that; with
+    # no /auth (beta.71+, Nov 16) entering sends /names instead: one message, and the full list.
+    PRESENT_S = 4 * 60
+
+    def _here(self):
+        """Entering over LoRa, quiet for PRESENT_S or more: /names, so the Stump has us in the
+        room again. If it had let us go, its answer says where it has us: FireFly follows."""
+        if self.pipe.kind == WIFI or time.time() - getattr(self.pipe, "sent_at", 0) < self.PRESENT_S:
+            return
+        room = (self.room or "").lstrip("#")
+        self.here_room = room or None
+        if room:
+            self.names_asked, self.names_asked_at = room, time.time()
+            self.names_quiet.discard(room)
+        self.pipe.send("/names")
 
     def _already_verified(self):
         """Does this Stump already know it's us? Over Wi-Fi, its own word this session (the
@@ -1207,6 +1229,12 @@ class StumpSession:
         if k == "names":
             room = p["room"].lstrip("#")
             self.names[room] = [stump.bare_nick(n) for n in p["names"]]     # "@alice" (op) is alice
+            asked, self.here_room = self.here_room, None
+            if asked and not stump.same_room(room, self.room or ""):
+                # Not where we thought (it had let us go after 5 quiet minutes): show where the
+                # Stump has us, rather than a room it isn't sending us.
+                self.names_asked, self.names_asked_at = room, time.time()   # (this answer is its list)
+                self._set_room(room, f"the Stump has you in #{room}")
             if stump.same_room(room, self.room or ""):
                 self._save(users=self._room_people(self.local_users))
             if room in self.names_quiet:                 # our own refresh: the list, not a line

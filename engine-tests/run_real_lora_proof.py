@@ -44,6 +44,7 @@ folder = os.path.join(work, "Stump"); os.makedirs(folder)
 P._pc_copy_firmware(P.STUMP_APP_DIR, folder)
 cfg = open(os.path.join(STUMP, "tests", "config.py"), encoding="utf-8").read()
 cfg += P._pc_config_block({"pc_hotspot_name": "x", "pc_heltec": "none"})
+cfg += "\nMESH_PEER_TIMEOUT = 45   # (5 min on a real Stump) to see it let a quiet LoRa client go\n"
 cfg += "\nNODE_NAME = 'LaBuche'\nPC_HTTP_PORT = %d\nPC_HOTSPOT_IP = %r\n" % (PORT, IP)
 cfg += ("CONFIG['interfaces'] = list(CONFIG['interfaces']) + [{'type': 'TCPClientInterface', 'name': 'hub', "
         "'enabled': True, 'target_host': '127.0.0.1', 'target_port': %d}]\n" % HUB)
@@ -58,7 +59,7 @@ except Exception:
     STUMP_REL = 0
 LX = json.loads(op.open(f"http://{IP}:{PORT}/node.json", timeout=5).read())["lxmf"]
 
-from firefly import api
+from firefly import api, stump
 class L:
     def onEvent(self, s): pass
 api.start(tempfile.mkdtemp(prefix="ff-lp-"), None, None, L(), "0.6.1-beta.72", 72)
@@ -82,7 +83,14 @@ def spy(line, control=False):
     sent.append(line)
     return real_send(line, control) if control else real_send(line)
 sess.pipe.send = spy
-lines = lambda: [l["body"] for l in json.loads(api.stump_view(K, sess.room or "main"))["lines"]]
+_real_in = sess.on_mesh_content
+def _trace(content, *a, **k):
+    if os.environ.get("TRACE"):
+        for ln in str(content).splitlines():
+            print("     <<", repr(ln[:120]), "| room now:", sess.room, flush=True)
+    return _real_in(content, *a, **k)
+sess.on_mesh_content = _trace
+lines = lambda: [l["body"] for r in ("main", "lora-mesh") for l in json.loads(api.stump_view(K, r))["lines"]]
 t = time.time()
 g = json.loads(api.stump_verify(K, True))      # entering, as the app does
 if STUMP_REL >= 71:
@@ -94,6 +102,20 @@ if STUMP_REL >= 71:
     print(f"     /whoami: {who[-1:] if who else 'no answer'} in {round(time.time() - t, 1)}s", flush=True)
     check("the Stump's /whoami: verified as FireFly's identity, no /auth ever sent",
           got and who[-1].startswith("verified as " + c.identity.hash.hex()) and "/auth" not in sent, (who, sent))
+    # Entering said "I'm here": /names went out, and its answer came back.
+    check("entering sent /names (the Stump keeps a LoRa client 5 min after its last message)",
+          "/names" in sent, sent)
+    check("...its answer arrived", wait(lambda: any(b.startswith("#") and ":" in b for b in lines()), 120), lines()[-4:])
+    # Away in #main, then quiet past the Stump's timeout (45 s here): it lets FireFly go.
+    sess.post("/join main")
+    check("joined #main", wait(lambda: stump.same_room(sess.room or "", "main"), 120), sess.room)
+    sess.pipe.sent_at = 0                      # (not the real clock's 4 minutes: the test's 45 s)
+    time.sleep(70)
+    n = len(sent)
+    json.loads(api.stump_verify(K, True))
+    check("entering after the timeout: /names again", sent[n:n + 1] == ["/names"], sent[n:])
+    check("...and its answer arrived: FireFly in the room the Stump has it in, nothing else sent",
+          wait(lambda: sess.here_room is None, 120) and "/join lora-mesh" not in sent[n:], (sess.room, sent[n:]))
 else:
     check("an older Stump: FireFly still sends /auth", "/auth" in sent, sent)
 
