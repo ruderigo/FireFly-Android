@@ -16,6 +16,8 @@ open(os.path.join(d, "config"), "w").write(f"""[reticulum]
     listen_port = {port}
 """)
 RNS.Reticulum(configdir=d)
+if os.environ.get('FIREFLY_STAMP_VALUE') and hasattr(RNS.Transport, 'DESTINATION_VALUE'):
+    RNS.Transport.DESTINATION_VALUE = float(os.environ['FIREFLY_STAMP_VALUE'])   # a cheap announce stamp (tests, Reticulum 1.6.1)
 print("hub up", flush=True)
 while True:
     time.sleep(1)

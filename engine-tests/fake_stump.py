@@ -707,6 +707,8 @@ def mesh_main(work, port):
         f.write(f"""[reticulum]\n  enable_transport = Yes\n  share_instance = No\n[logging]\n  loglevel = 2\n[interfaces]
   [[TCP Server]]\n    type = TCPServerInterface\n    enabled = yes\n    listen_ip = 127.0.0.1\n    listen_port = {port}\n""")
     RNS.Reticulum(configdir=work, loglevel=2)
+    if os.environ.get('FIREFLY_STAMP_VALUE') and hasattr(RNS.Transport, 'DESTINATION_VALUE'):
+        RNS.Transport.DESTINATION_VALUE = float(os.environ['FIREFLY_STAMP_VALUE'])   # a cheap announce stamp (tests, Reticulum 1.6.1)
     ident = RNS.Identity()
     if os.environ.get("FAKE_PN"):
         # A real upstream LXMF propagation node on the node's own identity, stamp cost 16,
