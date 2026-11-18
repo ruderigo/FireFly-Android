@@ -94,6 +94,52 @@ def announce_blob(dest_hash, packet_hash=None):
         return None
 
 
+# Flooding caps (Nov 17, from the potential-carrot review): what FireFly remembers about
+# addresses it hears is bounded, so a stream of new identities (cheap on Wi-Fi or TCP) can't
+# grow it for as long as the app runs.
+HEARD_MAX = 4000        # addresses kept in each in-memory list, the most recent
+
+
+class Recent(dict):
+    """A dict that keeps its `limit` most recently written keys: writing a key moves it last,
+    and past the limit the oldest goes. setdefault counts as writing (fresh_announce)."""
+    def __init__(self, limit=HEARD_MAX):
+        super().__init__()
+        self.limit = limit
+
+    def __setitem__(self, k, v):
+        if k in self:
+            super().__delitem__(k)
+        super().__setitem__(k, v)
+        while len(self) > self.limit:
+            super().__delitem__(next(iter(self)))
+
+    def setdefault(self, k, default=None):
+        if k in self:
+            v = super().pop(k)
+            super().__setitem__(k, v)
+            return v
+        self[k] = default
+        return default
+
+
+class RecentSet:
+    """A set that keeps its `limit` most recently added members."""
+    def __init__(self, limit=HEARD_MAX):
+        self._d = Recent(limit)
+
+    def add(self, k): self._d[k] = True
+    def update(self, items):
+        for k in items:
+            self.add(k)
+    def discard(self, k): self._d.pop(k, None)
+    def remove(self, k): del self._d[k]
+    def __contains__(self, k): return k in self._d
+    def __len__(self): return len(self._d)
+    def __iter__(self): return iter(list(self._d))
+    def clear(self): self._d.clear()
+
+
 def fresh_announce(memory, dest_hash, blob, is_path_response, window_s, now=None):
     """Did this announce come from its sender just now, or is it a relay's remembered copy?
     (Nov 2026: offline Stumps showed online. Any Reticulum relay answers a path request with the
@@ -136,7 +182,7 @@ class BeaconHandler:
 
     def __init__(self, on_stump):
         self.on_stump = on_stump
-        self.seen = {}
+        self.seen = Recent()
 
     def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None,
                           is_path_response=False):

@@ -37,6 +37,8 @@ PN_ASK_INTERVAL_S = 300     # how often to ask again for a Stump's propagation n
 SYNC_MAX_ROUNDS = 5
 SYNC_RETRY_WAITS_S = (10, 30)   # a failed round (no path, link failed) is retried after these
 SYNC_SOON_MIN_GAP_S = 120   # event-driven syncs (radio up, app opened) at most this often
+BEACON_ASK_GAP_S = 5        # at most one Stump-beacon path request per this, for announces heard
+PEERS_HEARD_MAX = 500       # contacts only ever heard (never written to, not saved, not a Stump) kept
 PN_SIZE_MARGIN = 96         # bytes a propagation stamp and transfer framing add to a packed message
 MONITOR_INTERVAL_S = 1.0
 IDENTITY_SIZE = 64
@@ -78,22 +80,22 @@ class Core:
         self.stumps = {}            # lxmf hash hex -> (name, version)
         self.sessions = {}          # session key -> StumpSession
         self.moved = {}             # an old Wi-Fi key -> the key of the same Stump at its new address
-        self.beacon_http = {}       # lxmf hex -> the web addresses its beacon gave (Stump 1.0.0-beta.21+)
+        self.beacon_http = stump.Recent()       # lxmf hex -> the web addresses its beacon gave (Stump 1.0.0-beta.21+)
         # Over LoRa, "online" is only what this run heard from the Stump itself, recently: its
         # announce or beacon, passed by fresh_announce (Nov 9: offline Stumps showed online, from
         # relays' remembered announces, opening a Stump, and times saved before the fix).
-        self.announce_heard = {}    # lxmf hex -> when its own announce came in (this run)
-        self.beacon_heard = {}      # lxmf hex -> when its own beacon came in (this run)
-        self.boots = {}             # lxmf hex -> its beacon's boot id, caps["b"] (Stump 1.0.0-beta.43+)
-        self.restarted_at = {}      # lxmf hex -> when its boot id last changed (it restarted)
-        self.met_this_run = set()   # Stumps whose own beacon we've heard since starting
+        self.announce_heard = stump.Recent()    # lxmf hex -> when its own announce came in (this run)
+        self.beacon_heard = stump.Recent()      # lxmf hex -> when its own beacon came in (this run)
+        self.boots = stump.Recent()             # lxmf hex -> its beacon's boot id, caps["b"] (Stump 1.0.0-beta.43+)
+        self.restarted_at = stump.Recent()      # lxmf hex -> when its boot id last changed (it restarted)
+        self.met_this_run = stump.RecentSet()   # Stumps whose own beacon we've heard since starting
         self._relocate_lock = threading.Lock()
-        self._relocate_tried = {}   # key -> when we last asked where it went
+        self._relocate_tried = stump.Recent()   # key -> when we last asked where it went
         self.extra_ifaces = []      # AutoInterface / TCP interfaces we attached
-        self._introduced = set()    # peers we've sent to this session (announced to first)
-        self._beacon_asked = set()  # peers whose Stump beacon we've asked a path for
+        self._introduced = stump.RecentSet()    # peers we've sent to this session (announced to first)
+        self._beacon_asked = stump.RecentSet()  # peers whose Stump beacon we've asked a path for
         self.blocked = set()        # LXMF addresses whose announces and messages are ignored
-        self.packs = set()          # LXMF addresses whose announce says they read packed text (ztext.py)
+        self.packs = stump.RecentSet()          # LXMF addresses whose announce says they read packed text (ztext.py)
         self.iface_errors = {}
         self.running = False
         self.radio = None
@@ -104,7 +106,8 @@ class Core:
         self.sync_state = "idle"
         self.sync_rounds = 0
         self._sync_chain = False
-        self.pn_asked = {}          # propagation hash -> last time we asked for its path
+        self.pn_asked = stump.Recent()
+        self._beacon_ask_at = 0.0       # the last Stump-beacon path asked for an announce heard          # propagation hash -> last time we asked for its path
         self.fast_stamps = False
         self.status_note = ""
 
@@ -316,9 +319,13 @@ class Core:
             self.packs.add(h)
         else:
             self.packs.discard(h)
-        if identity and h not in self.stumps and h not in self._beacon_asked:
-            # Asking is faster than waiting up to 30 minutes for the next beacon.
+        if (identity and h not in self.stumps and h not in self._beacon_asked
+                and time.time() - self._beacon_ask_at >= BEACON_ASK_GAP_S):
+            # Asking is faster than waiting up to 30 minutes for the next beacon. At most one
+            # every BEACON_ASK_GAP_S (Nov 17): a stream of new identities can't make the phone
+            # transmit on every interface, LoRa included. One skipped is asked at its next announce.
             self._beacon_asked.add(h)
+            self._beacon_ask_at = time.time()
             RNS.Transport.request_path(stump.beacon_hash_for(identity))
         if fresh:
             self.announce_heard[h] = time.time()
@@ -1564,7 +1571,7 @@ class _DeliveryAnnounces:
 
     def __init__(self, core):
         self.core = core
-        self.seen = {}
+        self.seen = stump.Recent()
 
     def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None,
                           is_path_response=False):
@@ -1584,7 +1591,7 @@ class _PropagationAnnounces:
 
     def __init__(self, core):
         self.core = core
-        self.seen = {}
+        self.seen = stump.Recent()
 
     def received_announce(self, destination_hash, announced_identity, app_data, announce_packet_hash=None,
                           is_path_response=False):

@@ -16,6 +16,7 @@ import RNS
 from LXMF.LXMessage import LXMessage
 from firefly import api
 from firefly.core import Core
+from firefly import stump
 
 fails = 0
 def check(name, ok, detail=""):
@@ -52,7 +53,7 @@ check("...and plain bytes too", row.get("content", "").endswith(" end") and "err
 check("three messages in the conversation", len(json.loads(api.messages(src.hash.hex()))) == 3)
 
 check("each engine has its own list of beacons asked for", "_beacon_asked" not in vars(Core)
-      and isinstance(vars(c).get("_beacon_asked"), set))
+      and isinstance(vars(c).get("_beacon_asked"), (set, stump.RecentSet)))   # (capped since Nov 17)
 
 print("ALL PASS" if not fails else f"{fails} FAILED")
 os._exit(1 if fails else 0)

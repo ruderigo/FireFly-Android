@@ -63,7 +63,7 @@ jobs:
 
       - name: The greeting (/hello), and /auth + /nick on older Stumps
         timeout-minutes: 3
-        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py run_verify_gate.py run_scan_add.py run_address_link.py run_lxmf_codes.py run_app_tag.py run_find_popup.py run_share_codes.py run_prop_switch.py run_fresh_announce.py run_stump_dm_thread.py run_room_names.py run_lora_auth.py run_lora_here.py run_auto_wifi_bind.py run_binary_content.py
+        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py run_verify_gate.py run_scan_add.py run_address_link.py run_lxmf_codes.py run_app_tag.py run_find_popup.py run_share_codes.py run_prop_switch.py run_fresh_announce.py run_stump_dm_thread.py run_room_names.py run_lora_auth.py run_lora_here.py run_auto_wifi_bind.py run_binary_content.py run_flood_caps.py
 
       - name: Packed text (more of a chat line in each LoRa packet)
         timeout-minutes: 2

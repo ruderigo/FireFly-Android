@@ -25,6 +25,14 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   packed (run_real_lora_proof).
 - Build 82, for Stump 1.0.0-beta.82 (also: a stamped message no longer dropped
   by a board; the LXMF router's memory capped; the Meter and Marco Polo packs).
+- **Flooding caps** (two of the carrot review's open points, decided Nov 17): a
+  stream of new LXMF identities (cheap on Wi-Fi or TCP) can no longer
+  - fill the contacts: those only ever heard (never written to, not saved,
+    not a Stump) keep the 500 most recently heard;
+  - make the phone transmit for each: at most one Stump-beacon path request
+    per 5 seconds for announces heard (one skipped is asked at its next);
+  - grow FireFly's in-memory lists: each keeps its 4000 most recent addresses.
+  The automatic propagation node stays as it is. Test: run_flood_caps.
 
 ### 0.6.1-beta.81 (Stump 1.0.0-beta.81)
 - Build 81, for Stump 1.0.0-beta.81 (a board answers path requests from what it

@@ -158,6 +158,9 @@ class Store:
             if row is None:
                 self._write("INSERT INTO peers(hash, kind, name, last_heard, hops) VALUES (?,?,?,?,?)",
                             (hash_hex, kind, name, now, hops))
+                self._new_peers = getattr(self, "_new_peers", 0) + 1
+                if self._new_peers % 25 == 0:
+                    self.prune_heard_only()
             else:
                 sets, args = [], []
                 if name:
@@ -171,6 +174,30 @@ class Store:
             for k, v in extra.items():
                 if k in ("stump", "stump_ver", "stamp_cost", "saved", "extra"):
                     self._write(f"UPDATE peers SET {k}=? WHERE hash=?", (v, hash_hex))
+
+    def prune_heard_only(self, keep=None):
+        """Contacts only ever heard (Nov 17, flooding cap): an LXMF address never written to or
+        from, not saved, not a Stump, not a Stump node's address, not blocked. Only the `keep`
+        most recently heard stay (PEERS_HEARD_MAX); the others go. -> how many went."""
+        if keep is None:
+            from .core import PEERS_HEARD_MAX as keep
+        with self.lock:
+            rows = self.db.execute(
+                """SELECT hash FROM peers p
+                   WHERE kind='lxmf' AND COALESCE(saved, 0)=0 AND stump IS NULL
+                     AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.peer=p.hash)
+                     AND NOT EXISTS (SELECT 1 FROM stump_nodes s WHERE s.lxmf=p.hash OR s.address=p.hash)
+                   ORDER BY COALESCE(last_heard, 0) DESC""").fetchall()
+            gone = [r[0] for r in rows[keep:]]
+            blocked = set()
+            try:
+                blocked = {r[0] for r in self.db.execute("SELECT hash FROM blocked")}
+            except Exception:
+                pass
+            gone = [h for h in gone if h not in blocked]
+            for h in gone:
+                self._write("DELETE FROM peers WHERE hash=?", (h,))
+            return len(gone)
 
     def peer(self, hash_hex):
         rows = self._read("SELECT * FROM peers WHERE hash=?", (hash_hex,))
