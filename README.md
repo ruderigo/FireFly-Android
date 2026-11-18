@@ -33,6 +33,14 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
     per 5 seconds for announces heard (one skipped is asked at its next);
   - grow FireFly's in-memory lists: each keeps its 4000 most recent addresses.
   The automatic propagation node stays as it is. Test: run_flood_caps.
+- **Fix: your own messages piled up in one room** when hopping rooms over LoRa
+  (since 0.5.0-beta.3). Each room change carried the last 60 seconds of your
+  lines into the new room, a rule meant for a move the Stump makes right after
+  you speak; with /join, a room button or the switch it moved what you'd just
+  said in the room you left. Now your own room changes move nothing; only a
+  move the Stump makes by itself does. Checked against a real Stump (each room
+  shows only what was said in it). Messages already mixed stay where they are.
+  Test: run_room_own_lines.
 
 ### 0.6.1-beta.81 (Stump 1.0.0-beta.81)
 - Build 81, for Stump 1.0.0-beta.81 (a board answers path requests from what it

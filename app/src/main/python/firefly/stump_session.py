@@ -584,7 +584,12 @@ class StumpSession:
         if parts and parts[0].lower() in ("/join", "/j") and len(parts) > 1:
             self.join_target, self.join_at = parts[1].lstrip("#").lower(), time.time()
 
-    def _set_room(self, room, why=None):
+    def _joined_by_us(self, room):
+        """Is this room the answer to a /join of ours (typed, a button, the switch)?"""
+        return bool(self.join_target and stump.same_room(self.join_target, room)
+                    and time.time() - self.join_at < JOIN_WINDOW_S)
+
+    def _set_room(self, room, why=None, ours=None):
         """Move our idea of the room, filing any of our own lines that were sent
         in the last moments (to the room we wrongly believed in) where they landed."""
         room = room.lstrip("#")
@@ -600,7 +605,13 @@ class StumpSession:
             return
         old, self.room = self.room, room
         self._save(room=room)
-        if old:
+        # Our own /join (typed, a room button, the switch): what we said before leaving stays
+        # where we said it. Only a move the Stump makes by itself (#lora-mesh with no radio,
+        # put back after a quiet spell) re-files the lines of the last moments. (Nov 17: each
+        # room change carried the last minute of our lines along: all of them in one room.)
+        if ours is None:
+            ours = self._joined_by_us(room)
+        if old and not ours:
             self.store.move_recent_own_lines(self.key, old, room, time.time() - MOVE_WINDOW_S)
         if why:
             self.store.add_line(self.key, room, "system", why)
@@ -1180,7 +1191,7 @@ class StumpSession:
             return self._handle_dm(p["author"], p["text"])
         if k == "already":
             if p["room"]:
-                self._set_room(p["room"])
+                self._set_room(p["room"], ours=self._joined_by_us(p["room"].lstrip("#")))
             self.join_target = None
             return self.store.add_line(self.key, self.room, "reply", p["text"])
         if k == "tier_refused":
@@ -1217,8 +1228,9 @@ class StumpSession:
                 # Not a /join of ours: the node landed us. That's the landing room, by its real
                 # name on this node (#lora-mesh, #lxmf on older ones, #wifi-mesh over a chain).
                 self.landing = p["room"].lstrip("#")
+            ours = self._joined_by_us(p["room"].lstrip("#"))
             self.join_target = None
-            self._set_room(p["room"])
+            self._set_room(p["room"], ours=ours)
             return self.store.add_line(self.key, self.room, "system", f"→ #{self.room}")
         if k == "room":
             self.rooms_asked_at = 0.0           # its answer is in
