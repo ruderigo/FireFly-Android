@@ -8,11 +8,16 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.1-beta.81** (sandbox, for Stump 1.0.0-beta.81; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.2-beta.81** (sandbox, for Stump 1.0.0-beta.81; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.2-beta.81: the potential-carrot team's work merged in (Nov 17)
+- Packed text and the code-review fixes below, made in potential-carrot on top
+  of build 73, merged with everything since (builds 77 to 81). Version 0.6.2
+  for packed text; build 81, for Stump 1.0.0-beta.81.
 
 ### 0.6.1-beta.81 (Stump 1.0.0-beta.81)
 - Build 81, for Stump 1.0.0-beta.81 (a board answers path requests from what it
@@ -69,6 +74,45 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   The tests now enter as the app does (run_lora_auth, run_real_lora_proof).
 - Build 77, for Stump 1.0.0-beta.77 (beta.74 to .77: updates, packs, a Stump's
   identity in a file, the Provisioner; nothing to change in FireFly).
+
+### 0.6.2-beta.74: packed text, more of a chat line in each LoRa packet (Stump 1.0.0-beta.74)
+- One LoRa packet holds 295 bytes of LXMF content; the rest of its 500 goes to
+  addresses, the signature and the encryption, whatever the message. To and from
+  those whose LXMF announce says they read it (a fifth item after FireFly's app tag,
+  `{"z": 1}`: a Stump from 1.0.0-beta.74, another FireFly), a message's text now goes
+  **packed**: about 60% of its bytes for ordinary chat, a sixth for a Stump's `/help`
+  (800 bytes over a link, now 134 in one packet). A line too long for one packet
+  often fits; a Stump's batch of room lines takes fewer packets. Everyone else
+  (Sideband, MeshChat, an older Stump) gets plain text exactly as before.
+- The format is the Stump's (`ztext.py`, the same file): a DEFLATE block whose Huffman
+  tables and dictionary are fixed and never sent, read with zlib, never more than
+  2048 bytes out. Stump's CLIENT_QUICKSTART, *Packed text*, has it in full.
+- The Store, the UI and every retry keep the text itself; the setting `packed_text`
+  (on) turns it off. Test: `run_packed_text`.
+
+### 0.6.2-beta.74, also: code review (Nov 2026)
+- **A message whose content isn't text was lost.** Any LXMF app can send bytes that
+  aren't UTF-8 as a message's content; LXMF gives `None` for those and the
+  conversation's store can't hold it: the message never showed, with an exception in
+  LXMF's delivery thread. It's kept now, what isn't text shown as replacement
+  characters. Test: `run_binary_content` (fails on build 73).
+- The list of peers already asked for a Stump beacon belongs to each engine (it was a
+  class attribute, shared by every engine in a process: the tests, mostly). Imports
+  nothing used, removed. No other change in behaviour.
+- Noted, not changed (for the pentest, and to decide together):
+  - *Automatic* propagation node: a Stump's own node comes first, but with none known
+    the nearest node announced in the last day is taken, whoever runs it. Messages
+    left there stay encrypted for their recipient; the node can drop them, and sees
+    who syncs and who is written to. Consider taking only a Stump's node
+    automatically, and never leaving a node that works for one never used.
+  - Every LXMF announce from an address not seen before adds a row to the store's
+    peers (never cleared) and sends one path request for that identity's Stump
+    beacon, on every interface, LoRa included. A stream of new identities (cheap on
+    a TCP or Wi-Fi interface) fills the Chats list's contacts and makes each phone in
+    range transmit. Consider a rate limit on those requests, and a cap on peers only
+    ever heard.
+  - `fresh_announce`'s memory, `announce_heard`, `beacon_heard`, `pn_asked` grow with
+    every address heard for as long as the app runs (about 1 KB each at most).
 
 ### 0.6.1-beta.73 (Stump 1.0.0-beta.73)
 - Build 73, for Stump 1.0.0-beta.73: stumpid can no longer be left switched off

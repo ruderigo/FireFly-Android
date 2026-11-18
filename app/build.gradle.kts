@@ -30,7 +30,7 @@ android {
     minSdk = 26
     targetSdk = 36
     versionCode = 81
-    versionName = "0.6.1-beta.81"
+    versionName = "0.6.2-beta.81"
     ndk { abiFilters += abis }
   }
 

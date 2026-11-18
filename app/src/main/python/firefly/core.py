@@ -25,7 +25,7 @@ import LXMF
 from LXMF.LXMessage import LXMessage
 from LXMF.LXMRouter import LXMRouter
 
-from . import stump
+from . import stump, ztext
 from .radio import RadioManager
 from .settings import Paths, Settings
 from .store import Store
@@ -91,7 +91,9 @@ class Core:
         self._relocate_tried = {}   # key -> when we last asked where it went
         self.extra_ifaces = []      # AutoInterface / TCP interfaces we attached
         self._introduced = set()    # peers we've sent to this session (announced to first)
+        self._beacon_asked = set()  # peers whose Stump beacon we've asked a path for
         self.blocked = set()        # LXMF addresses whose announces and messages are ignored
+        self.packs = set()          # LXMF addresses whose announce says they read packed text (ztext.py)
         self.iface_errors = {}
         self.running = False
         self.radio = None
@@ -120,8 +122,10 @@ class Core:
         self.router = LXMRouter(identity=self.identity, storagepath=self.paths.lxmf_storage)
         # Every announce says it's FireFly: the ones it sends, and the ones that answer a path
         # request (LXMF builds both with get_announce_app_data).
+        # ... and, after the tag, that it reads packed text (unless switched off in the settings).
         lxmf_app_data = self.router.get_announce_app_data
-        self.router.get_announce_app_data = lambda h: stump.with_app_tag(lxmf_app_data(h), self.app_tag)
+        self.router.get_announce_app_data = lambda h: stump.with_app_tag(
+            lxmf_app_data(h), self.app_tag, {"z": 1} if self.settings["packed_text"] else None)
         self.local = self.router.register_delivery_identity(self.identity, display_name=s["display_name"])
         self.router.register_delivery_callback(self._on_message)
         for b in self.store.blocked():
@@ -308,6 +312,10 @@ class Core:
         self.store.upsert_peer(dest_hash.hex(), "lxmf", name=name, hops=hops, heard=fresh,
                                stamp_cost=LXMF.stamp_cost_from_app_data(app_data) if app_data else None)
         h = dest_hash.hex()
+        if app_data and stump.reads_packed(app_data):
+            self.packs.add(h)
+        else:
+            self.packs.discard(h)
         if identity and h not in self.stumps and h not in self._beacon_asked:
             # Asking is faster than waiting up to 30 minutes for the next beacon.
             self._beacon_asked.add(h)
@@ -316,8 +324,6 @@ class Core:
             self.announce_heard[h] = time.time()
         if h in self.stumps and fresh:
             self.store.upsert_stump_node(mesh_key(h), "mesh", h, last_seen=time.time())
-
-    _beacon_asked = set()
 
     def _on_stump_beacon(self, lxmf_hex, name, version, http=None, boot=None, fresh=True, release=None):
         """fresh: the beacon came from the Stump now (a relay's remembered copy isn't hearing
@@ -800,7 +806,10 @@ class Core:
             desired = LXMessage.OPPORTUNISTIC
         # The standard LXMF audio field, [mode, bytes]: what Sideband sends and plays.
         fields = {LXMF.FIELD_AUDIO: [int(audio[0]), bytes(audio[1])]} if audio else None
-        lxm = LXMessage(dest, self.local, text, title=title, desired_method=desired, fields=fields)
+        # To someone who reads packed text, the text goes shorter: more of it in one LoRa packet
+        # (the Store, and every retry, keep the text itself).
+        content = ztext.pack(text.encode("utf-8")) if peer_hex in self.packs and self.settings["packed_text"] else text
+        lxm = LXMessage(dest, self.local, content, title=title, desired_method=desired, fields=fields)
         if desired == LXMessage.PROPAGATED:
             limit_kb = self.propagation_transfer_limit_kb()
             if limit_kb:
@@ -894,7 +903,7 @@ class Core:
         lxm_hash = lxm.hash.hex() if lxm.hash else None
         if lxm_hash and self.store.has_message(lxm_hash):
             return
-        content = lxm.content_as_string() if lxm.content else ""
+        content = self._text_of(lxm)
         audio = _audio_field(lxm.fields)
         attachments = [label for fid, label in FIELD_NAMES.items()
                        if lxm.fields and fid in lxm.fields and not (fid == LXMF.FIELD_AUDIO and audio)]
@@ -915,6 +924,19 @@ class Core:
             peer_row = self.store.peer(peer) or {}
             self.emit({"type": "message", "peer": peer, "name": peer_row.get("name"), "text": content,
                        "audio": bool(audio)})
+
+    def _text_of(self, lxm):
+        """A message's text: unpacked first when it came packed (ztext.py). Bytes that aren't
+        UTF-8 show as replacement characters (LXMF's content_as_string() gives None for those,
+        and the Store's content can't be NULL)."""
+        raw = lxm.content
+        if not raw:
+            return ""
+        if raw[0] >= ztext.PLAIN and self.settings["packed_text"]:
+            text = ztext.unpack(raw)
+            if text is not None:
+                raw = text
+        return bytes(raw).decode("utf-8", "replace")
 
     # ================================================================ Stump
     def open_stump_mesh(self, node_hex):
@@ -1314,7 +1336,7 @@ class Core:
             time.sleep(MONITOR_INTERVAL_S)
 
 
-from .audio import CODEC2_FRAMES, MAX_VOICE_BYTES, OPUS_OGG, PLAYABLE, duration_ms as _voice_ms
+from .audio import CODEC2_FRAMES, MAX_VOICE_BYTES, OPUS_OGG
 
 VOICE_AUTO, VOICE_DEFAULT_CODEC2 = 0, 4      # Automatic; Codec 2 1200
 
