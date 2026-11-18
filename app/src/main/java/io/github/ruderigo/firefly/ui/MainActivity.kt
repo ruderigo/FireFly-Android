@@ -36,6 +36,8 @@ sealed interface Route {
     data class Home(val tab: Int = 0) : Route
     data class Chat(val peer: String) : Route
     data class Node(val key: String) : Route
+    /** A Stump's /admin page, over the Wi-Fi: its address ("http://192.168.4.1") and name. */
+    data class Admin(val base: String, val name: String) : Route
     data class Dm(val key: String, val nick: String) : Route
     data object Pair : Route
     data object Propagation : Route
@@ -151,6 +153,7 @@ fun App() {
                 is Route.Home -> Home(r.tab, { stack[stack.lastIndex] = Route.Home(it) }, go)
                 is Route.Chat -> ConversationScreen(r.peer, back, go)
                 is Route.Node -> NodeScreen(r.key, back, go)
+                is Route.Admin -> StumpAdminScreen(r.base, r.name, back)
                 is Route.Dm -> DmScreen(r.key, r.nick, back)
                 Route.Pair -> PairScreen(back)
                 Route.Propagation -> PropagationScreen(back)

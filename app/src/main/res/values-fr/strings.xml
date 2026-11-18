@@ -158,6 +158,12 @@
     <string name="settings_saved_radio">Enregistré · la radio se règle dans un instant</string>
     <string name="starting">démarrage de Reticulum</string>
     <string name="stump_defaults_fill">Remplir avec les réglages des Bûches (915,0 MHz · 125 kHz · SF8 · 4/5 · 7 dBm)</string>
+    <string name="admin_menu">Admin</string>
+    <string name="admin_wifi_only">Admin (Wi-Fi seulement)</string>
+    <string name="admin_menu_text">Sa page d\'admin, par son Wi-Fi.</string>
+    <string name="admin_title">Admin · %1$s</string>
+    <string name="admin_reload">Recharger</string>
+    <string name="admin_no_wifi">La page d\'admin est sur le Wi-Fi de la Bûche : rejoignez-le pour l\'ouvrir.</string>
     <string name="stump_hide">Masquer</string>
     <string name="stump_hide_text">Retirée de la liste, historique conservé. Elle revient si elle vous écrit.</string>
     <string name="stump_nick">Pseudo sur la Bûche</string>

@@ -158,6 +158,12 @@
     <string name="settings_saved_radio">Saved · the radio retunes in a moment</string>
     <string name="starting">starting Reticulum</string>
     <string name="stump_defaults_fill">Fill in the Stump defaults (915.0 MHz · 125 kHz · SF8 · 4/5 · 7 dBm)</string>
+    <string name="admin_menu">Admin</string>
+    <string name="admin_wifi_only">Admin (Wi-Fi only)</string>
+    <string name="admin_menu_text">Its admin page, over its Wi-Fi.</string>
+    <string name="admin_title">Admin · %1$s</string>
+    <string name="admin_reload">Reload</string>
+    <string name="admin_no_wifi">The admin page is on the Stump\'s Wi-Fi: join it to open it.</string>
     <string name="stump_hide">Hide</string>
     <string name="stump_hide_text">Off the list, history kept. It comes back if it messages you.</string>
     <string name="stump_nick">Stump nick</string>

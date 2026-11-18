@@ -158,6 +158,12 @@
     <string name="settings_saved_radio">Guardado · la radio se ajusta en un momento</string>
     <string name="starting">iniciando Reticulum</string>
     <string name="stump_defaults_fill">Rellenar con los valores de los Troncos (915,0 MHz · 125 kHz · SF8 · 4/5 · 7 dBm)</string>
+    <string name="admin_menu">Admin</string>
+    <string name="admin_wifi_only">Admin (solo Wi-Fi)</string>
+    <string name="admin_menu_text">Su página de admin, por su Wi-Fi.</string>
+    <string name="admin_title">Admin · %1$s</string>
+    <string name="admin_reload">Recargar</string>
+    <string name="admin_no_wifi">La página de admin está en el Wi-Fi del Tronco: únete a él para abrirla.</string>
     <string name="stump_hide">Ocultar</string>
     <string name="stump_hide_text">Fuera de la lista, se conserva el historial. Vuelve si te escribe.</string>
     <string name="stump_nick">Apodo en el Tronco</string>

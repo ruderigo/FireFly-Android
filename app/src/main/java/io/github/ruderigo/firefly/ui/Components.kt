@@ -235,9 +235,9 @@ fun ConfirmDialog(title: String, text: String, confirm: String, onConfirm: () ->
         })
 }
 
-/** The ⋯ menu of a screen's top bar. */
+/** The ⋯ menu of a screen's top bar. Items named in [disabled] are shown greyed and do nothing. */
 @Composable
-fun OverflowMenu(items: List<Pair<String, () -> Unit>>) {
+fun OverflowMenu(items: List<Pair<String, () -> Unit>>, disabled: Set<String> = emptySet()) {
     var open by remember { mutableStateOf(false) }
     Box {
         Text("⋯", modifier = Modifier.clip(Small).clickable { open = true }.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -245,9 +245,10 @@ fun OverflowMenu(items: List<Pair<String, () -> Unit>>) {
         androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false },
             modifier = Modifier.background(Amber.Panel)) {
             items.forEach { (label, action) ->
+                val on = label !in disabled
                 androidx.compose.material3.DropdownMenuItem(
-                    text = { Text(label, style = MaterialTheme.typography.bodyMedium) },
-                    onClick = { open = false; action() })
+                    text = { Text(label, style = MaterialTheme.typography.bodyMedium.copy(color = if (on) Amber.Text else Amber.Dim)) },
+                    enabled = on, onClick = { open = false; action() })
             }
         }
     }

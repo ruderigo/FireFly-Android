@@ -81,7 +81,10 @@ fun StumpsScreen(go: (Route) -> Unit) {
     var removing by remember { mutableStateOf<JSONObject?>(null) }
     // A row may stand for one Stump on LoRa and Wi-Fi: hide or remove acts on both.
     fun keysOf(n: JSONObject) = listOf(n.optString("key")) + (n.optJSONArray("others")?.objects()?.map { it.optString("key") } ?: emptyList())
-    acting?.let { n -> StumpActions(n.nameText().ifBlank { n.optString("address") }, onDismiss = { acting = null },
+    acting?.let { n -> StumpActions(n.nameText().ifBlank { n.optString("address") },
+        admin = n.optString("admin").takeIf { it.isNotBlank() && it != "null" },
+        onAdmin = { base -> go(Route.Admin(base, n.nameText().ifBlank { n.optString("address") })); acting = null },
+        onDismiss = { acting = null },
         onHide = { keysOf(n).forEach { Engine.fire("stump_hide", it) }; acting = null },
         onRemove = { removing = n; acting = null }) }
     removing?.let { n -> ConfirmRemoveStump(n.nameText().ifBlank { n.optString("address") }, onDismiss = { removing = null }) {
@@ -228,9 +231,15 @@ fun NodeScreen(openedAs: String, back: () -> Unit, go: (Route) -> Unit) {
                 "waiting" -> Text(stringResource(R.string.verifying), style = MaterialTheme.typography.labelMedium)
                 else -> Button(stringResource(R.string.verify_identity), primary = false) { Engine.fire("stump_auth", key) }
             }
+            // Its /admin page (Nov 18): over the Wi-Fi only, where it answers now; else greyed.
+            val adminBase = webKey?.substringAfter("wifi:")
+            val adminLabel = stringResource(if (adminBase != null) R.string.admin_menu else R.string.admin_wifi_only)
+            val adminName = view.nameText().ifBlank { key.substringAfter(":") }
             OverflowMenu(listOf(
+                adminLabel to { adminBase?.let { go(Route.Admin(it, adminName)) } },
                 stringResource(R.string.stump_hide) to { Engine.fire("stump_hide", key); back() },
-                stringResource(R.string.stump_remove) to { menuRemove = true }))
+                stringResource(R.string.stump_remove) to { menuRemove = true }),
+                disabled = if (adminBase == null) setOf(adminLabel) else emptySet())
         }
         if (mesh && !view.optBoolean("reachable", true)) {
             val alt = view.optString("wifi_alt").takeIf { it.isNotBlank() && it != "null" }
@@ -651,12 +660,20 @@ fun DmScreen(key: String, nick: String, back: () -> Unit) {
 
 /** Long-press on a Stump: hide it (history kept) or remove it (history deleted). */
 @Composable
-private fun StumpActions(name: String, onDismiss: () -> Unit, onHide: () -> Unit, onRemove: () -> Unit) {
+private fun StumpActions(name: String, admin: String?, onAdmin: (String) -> Unit, onDismiss: () -> Unit,
+                         onHide: () -> Unit, onRemove: () -> Unit) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss, containerColor = Amber.Panel, shape = Large,
         title = { Text(name, style = MaterialTheme.typography.titleMedium) },
         text = {
             Column {
+                // Its /admin page, over the Wi-Fi (greyed when it isn't answering there now).
+                Column(Modifier.fillMaxWidth().clip(Small).clickable(enabled = admin != null) { admin?.let(onAdmin) }
+                    .padding(vertical = 8.dp)) {
+                    Text(stringResource(if (admin != null) R.string.admin_menu else R.string.admin_wifi_only),
+                        style = MaterialTheme.typography.labelLarge.copy(color = if (admin != null) Amber.Ember else Amber.Dim))
+                    Text(stringResource(R.string.admin_menu_text), style = MaterialTheme.typography.bodySmall)
+                }
                 Column(Modifier.fillMaxWidth().clip(Small).clickable(onClick = onHide).padding(vertical = 8.dp)) {
                     Text(stringResource(R.string.stump_hide), style = MaterialTheme.typography.labelLarge.copy(color = Amber.Ember))
                     Text(stringResource(R.string.stump_hide_text), style = MaterialTheme.typography.bodySmall)

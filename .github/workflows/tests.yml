@@ -124,4 +124,4 @@ jobs:
       - name: Build the debug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug testDebugUnitTest --no-daemon --stacktrace

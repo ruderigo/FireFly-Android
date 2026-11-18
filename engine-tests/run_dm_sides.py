@@ -49,6 +49,8 @@ c.session("mesh:" + LX)._incoming_dm("rod@LaBuche", "are you there, rods-cell?")
 row = next(r for r in json.loads(api.stump_nodes()) if r.get("group") == LX)
 check("the Stumps row: one row, opening over Wi-Fi, one more unread DM",
       row["key"] == wkey and row["unread_dms"] == before + 1, (row["key"], row["unread_dms"], before))
+check("...and its /admin page's address is where it answers on the Wi-Fi (Nov 18)",
+      row.get("admin") == "http://127.0.0.1:47670", row.get("admin"))
 threads = json.loads(api.stump_view(wkey))["threads"]
 check("the Wi-Fi side's DM list shows the conversation, unread",
       any(t["nick"] == "rod@LaBuche" and t["unread"] == 1 for t in threads), threads)

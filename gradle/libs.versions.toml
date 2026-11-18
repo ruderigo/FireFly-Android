@@ -10,6 +10,7 @@ composeBom = "2024.09.00"
 coroutines = "1.10.2"
 usbSerial = "3.7.3"
 zxingEmbedded = "4.3.0"
+webkit = "1.12.1"
 junit = "4.13.2"
 
 [libraries]
@@ -25,6 +26,7 @@ androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-toolin
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 usb-serial = { group = "com.github.mik3y", name = "usb-serial-for-android", version.ref = "usbSerial" }
 zxing-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingEmbedded" }
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

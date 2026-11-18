@@ -56,5 +56,9 @@ check("...and says so", any("#lora-mesh" in l["body"] for l in json.loads(api.st
 sess._handle(stump.parse_line("#main: @alice"))
 check("...a /names answer not asked on entering moves nothing", sess.room == "lora-mesh", sess.room)
 
+row = next(r for r in json.loads(api.stump_nodes()) if r.get("group") == LX)
+check("a Stump reached over LoRa only: no /admin address (the menu shows it greyed, Wi-Fi only)",
+      row.get("admin") is None, row.get("admin"))
+
 print("ALL PASS" if not fails else f"{fails} FAILED")
 os._exit(1 if fails else 0)

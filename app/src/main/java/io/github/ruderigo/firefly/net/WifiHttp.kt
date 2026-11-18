@@ -41,6 +41,8 @@ class WifiHttp(context: Context) {
     /** A Stump hotspot joined from Find Stumps (WifiNetworkSpecifier): used first while it's up. */
     @Volatile private var joined: Network? = null
     private val wifi: Network? get() = joined ?: order.lastOrNull()
+    /** The Wi-Fi network Stump traffic goes over (null: not on a Wi-Fi). For WifiProxy. */
+    fun wifiNetwork(): Network? = wifi
 
     init {
         instance = this

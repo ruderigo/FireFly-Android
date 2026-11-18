@@ -8,11 +8,30 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.3-beta.86** (sandbox, for Stump 1.0.0-beta.86; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.4-beta.86** (sandbox, for Stump 1.0.0-beta.86; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.4-beta.86: a Stump's /admin inside FireFly (Nov 18)
+- **Admin**, in a Stump's ⋯ menu (next to "verified") and in the long-press
+  menu on the Stumps panel: the Stump's own /admin page, unchanged (its
+  password screen, its phone layout, its own switch to HTTPS), full screen
+  in FireFly with FireFly's bar ("← Admin · Bûche", Reload). Logged in, its
+  cookie keeps it so. FireFly keeps no password (no form data saved).
+  - Over the Wi-Fi whatever the connection: the web view goes through a
+    small relay inside FireFly (WifiProxy, 127.0.0.1 only, via androidx.webkit
+    ProxyController, FireFly's web views only, while the screen is open) that
+    sends over the Wi-Fi network. A Stump's hotspot with no internet works
+    beside mobile data; nothing else changes: the rest of FireFly and other
+    apps (a show streaming beside it, split screen) keep their own way out.
+  - A Stump reached over LoRa only: the item shows greyed, "Admin (Wi-Fi only)".
+  - Checked: the relay against a real Stump's /admin (login page, a wrong
+    password refused, the right one, its cookie, the dashboard); a unit test
+    (WifiProxyTest: plain path, cookie, form POST body, HTTPS tunnel, 502,
+    eight at once) runs in CI; the list gives the address (run_dm_sides,
+    run_lora_here).
 
 ### 0.6.3-beta.86: Reticulum 1.6.1 and LXMF 1.3.1 (Stump 1.0.0-beta.86)
 - **On Reticulum 1.6.1 / LXMF 1.3.1** (were 1.5.5 / 1.2.0). 1.6.1 puts a

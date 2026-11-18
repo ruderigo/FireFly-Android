@@ -30,7 +30,7 @@ android {
     minSdk = 26
     targetSdk = 36
     versionCode = 86
-    versionName = "0.6.3-beta.86"
+    versionName = "0.6.4-beta.86"
     ndk { abiFilters += abis }
   }
 
@@ -98,6 +98,7 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.usb.serial)
+  implementation(libs.androidx.webkit)     // a Stump's /admin in FireFly: its web view over the Wi-Fi (ProxyController)
   implementation(libs.zxing.embedded)     // scan a Stump's QR code (Apache-2.0, offline, no Google services)
   testImplementation(libs.junit)
 }

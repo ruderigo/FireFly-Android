@@ -325,7 +325,13 @@ def stump_nodes(on_wifi=None):
         first["name"] = next((m["name"] for m in members if m.get("name") and not str(m["name"]).startswith("Stump Wi-Fi (")),
                              first.get("name"))
         first["group"] = g                  # stays the same whichever transport opens first
-        first["alive"] = c.stump_reach(first["key"], _flag(on_wifi))["state"] in ("wifi", "lora")
+        reach_now = c.stump_reach(first["key"], _flag(on_wifi))
+        first["alive"] = reach_now["state"] in ("wifi", "lora")
+        # Its /admin page's address: where it answers on the Wi-Fi now (None: not there now).
+        web = reach_now.get("web") if reach_now["state"] == "wifi" else None
+        if not web and first["transport"] == "wifi" and reach_now["state"] == "wifi":
+            web = first["key"]
+        first["admin"] = web.split(":", 1)[1] if web and web.startswith("wifi:") else None
         out.append(first)
     # A steady order: by name, not by who was heard last (Stumps close to each other beacon and
     # answer all the time, and a list sorted by "last heard" kept jumping).
