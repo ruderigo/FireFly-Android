@@ -8,16 +8,23 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.2-beta.81** (sandbox, for Stump 1.0.0-beta.81; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.2-beta.82** (sandbox, for Stump 1.0.0-beta.82; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
 
-### 0.6.2-beta.81: the potential-carrot team's work merged in (Nov 17)
-- Packed text and the code-review fixes below, made in potential-carrot on top
-  of build 73, merged with everything since (builds 77 to 81). Version 0.6.2
-  for packed text; build 81, for Stump 1.0.0-beta.81.
+### 0.6.2-beta.82: packed text with the Stumps (Stump 1.0.0-beta.82)
+- The potential-carrot team's work merged in: packed text and the code-review
+  fixes (their "0.6.2-beta.74" sections below), made on top of build 73, merged
+  with everything since (builds 77 to 81).
+- **Packed text with Stumps**: Stump 1.0.0-beta.82 merged the same format
+  (potential-broccoli); FireFly's `ztext.py` is byte for byte the Stump's
+  `urns/ztext.py`. Checked with a real beta.82 Stump: its announce says it
+  reads packed text, FireFly's lines to it go packed and its answers come back
+  packed (run_real_lora_proof).
+- Build 82, for Stump 1.0.0-beta.82 (also: a stamped message no longer dropped
+  by a board; the LXMF router's memory capped; the Meter and Marco Polo packs).
 
 ### 0.6.1-beta.81 (Stump 1.0.0-beta.81)
 - Build 81, for Stump 1.0.0-beta.81 (a board answers path requests from what it

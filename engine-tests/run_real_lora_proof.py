@@ -59,7 +59,7 @@ except Exception:
     STUMP_REL = 0
 LX = json.loads(op.open(f"http://{IP}:{PORT}/node.json", timeout=5).read())["lxmf"]
 
-from firefly import api, stump
+from firefly import api, stump, ztext
 class L:
     def onEvent(self, s): pass
 api.start(tempfile.mkdtemp(prefix="ff-lp-"), None, None, L(), "0.6.1-beta.72", 72)
@@ -108,6 +108,20 @@ sess.on_mesh_content = _trace
 lines = lambda: [l["body"] for r in ("main", "lora-mesh") for l in json.loads(api.stump_view(K, r))["lines"]]
 t = time.time()
 g = json.loads(api.stump_verify(K, True))      # entering, as the app does
+if STUMP_REL >= 82:
+    # Packed text (Stump beta.82, FireFly 0.6.2): its LXMF announce says it reads it, so what
+    # FireFly sends it goes packed, and what it sends back comes packed, read here.
+    check("beta.82+: its announce says it reads packed text", wait(lambda: LX in c.packs, 60), sorted(c.packs)[:3])
+    _packed = []
+    _real_pack = ztext.pack
+    def _spy_pack(b):
+        out = _real_pack(b); _packed.append((b, out)); return out
+    ztext.pack = _spy_pack
+    _real_unpack = ztext.unpack
+    _unpacked = []
+    def _spy_unpack(raw):
+        out = _real_unpack(raw); _unpacked.append(out); return out
+    ztext.unpack = _spy_unpack
 if STUMP_REL >= 71:
     check("beta.71+: in at once, no /auth sent", g["state"] == "ok" and "/auth" not in sent, (g, sent))
     time.sleep(3)
@@ -117,6 +131,11 @@ if STUMP_REL >= 71:
     print(f"     /whoami: {who[-1:] if who else 'no answer'} in {round(time.time() - t, 1)}s", flush=True)
     check("the Stump's /whoami: verified as FireFly's identity, no /auth ever sent",
           got and who[-1].startswith("verified as " + c.identity.hash.hex()) and "/auth" not in sent, (who, sent))
+    if STUMP_REL >= 82:
+        print(f"     packed: {len(_packed)} sent ({sum(len(x) for x, _ in _packed)} -> {sum(len(y) for _, y in _packed)} bytes),"
+              f" {len(_unpacked)} received", flush=True)
+        check("...what FireFly sent it went packed (and the Stump understood it)", any(x == b"/whoami" for x, _ in _packed), _packed[:3])
+        check("...what it sent back came packed, and FireFly read it", any(o.startswith(b"verified as") for o in _unpacked), _unpacked[:3])
     # Entering said "I'm here": /names went out, and its answer came back.
     check("entering sent /names (the Stump keeps a LoRa client 5 min after its last message)",
           "/names" in sent, sent)
