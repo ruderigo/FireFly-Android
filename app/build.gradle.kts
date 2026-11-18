@@ -29,8 +29,8 @@ android {
     applicationId = "io.github.ruderigo.firefly"
     minSdk = 26
     targetSdk = 36
-    versionCode = 82
-    versionName = "0.6.2-beta.82"
+    versionCode = 86
+    versionName = "0.6.3-beta.86"
     ndk { abiFilters += abis }
   }
 
@@ -75,8 +75,8 @@ chaquopy {
     (findProperty("firefly.buildPython") as String?)?.let { buildPython(it) }
     pip {
       // Pinned to the versions the engine tests (engine-tests/) run against.
-      install("rns==1.5.5")
-      install("lxmf==1.2.0")
+      install("rns==1.6.1")
+      install("lxmf==1.3.1")
       install("pyserial")      // imported by Reticulum's RNode driver; the port itself is ours
     }
     pyc { src = true }

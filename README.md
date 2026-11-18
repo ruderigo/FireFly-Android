@@ -8,11 +8,36 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.2-beta.82** (sandbox, for Stump 1.0.0-beta.82; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.3-beta.86** (sandbox, for Stump 1.0.0-beta.86; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.3-beta.86: Reticulum 1.6.1 and LXMF 1.3.1 (Stump 1.0.0-beta.86)
+- **On Reticulum 1.6.1 / LXMF 1.3.1** (were 1.5.5 / 1.2.0). 1.6.1 puts a
+  proof-of-work stamp on every announce (cost 25) and holds an announce, and
+  the answer to a path request, until its stamp is made: once per address,
+  then kept, but up to minutes on a phone the first time.
+  - **Announce at once meanwhile**: with no stamp kept yet, FireFly announces
+    without one, as before (no node asks for stamps unless its admin sets it),
+    makes the stamp in the background at low priority, then announces stamped
+    from then on; the next start loads the kept stamp. Test: run_announce_stamp.
+  - **Stamps made without multiprocessing on Android**: from LXMF 1.3 every
+    stamp (message stamps too) is made by Reticulum, whose Android path forks
+    worker processes; Chaquopy's Python has no multiprocessing, and a stamp
+    that can't be made cancels the announce. FireFly's single-process search
+    (Reticulum's rules, the work block hashed once) replaces it: a cost-25
+    announce stamp in 8 to 18 s on one core here. Test: run_stamps (real costs,
+    multiprocessing made to fail as on the phone).
+  - Two tests read Reticulum's announce handlers, now a table by aspect.
+  - CI uses a cheap stamp (FIREFLY_STAMP_VALUE), as the Stump team's reference
+    tests do, and gets 50 minutes.
+- Checked with a real beta.86 Stump: no /auth over LoRa, packed text both ways,
+  uploads, the board over LXMF.
+- Build 86, for Stump 1.0.0-beta.86 (beta.85: a 1.6.1 node's announce read
+  right, replies wait for a 1.6.1 app's path; beta.86: announce stamps on a
+  Stump, off by default; beta.83-84 for the Stumps themselves).
 
 ### 0.6.2-beta.82: packed text with the Stumps (Stump 1.0.0-beta.82)
 - The potential-carrot team's work merged in: packed text and the code-review

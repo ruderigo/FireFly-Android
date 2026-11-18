@@ -121,6 +121,11 @@ class Core:
             # its dedicated engine thread for exactly this reason.
             self.log("warning: engine not started on the Python main thread")
         self.reticulum = RNS.Reticulum(configdir=self.paths.rns_config_dir, loglevel=int(s["log_level"]))
+        # Before any stamp is made (Reticulum 1.6.1 stamps announces): ours, single process.
+        self.fast_stamps = _install_fast_stamper()
+        if os.environ.get("FIREFLY_STAMP_VALUE") and hasattr(RNS.Transport, "DESTINATION_VALUE"):
+            # Tests only (like the Stump team's reference tests): a cheap announce stamp.
+            RNS.Transport.DESTINATION_VALUE = float(os.environ["FIREFLY_STAMP_VALUE"])
         self.identity = self._load_identity()
         self.router = LXMRouter(identity=self.identity, storagepath=self.paths.lxmf_storage)
         # Every announce says it's FireFly: the ones it sends, and the ones that answer a path
@@ -130,6 +135,7 @@ class Core:
         self.router.get_announce_app_data = lambda h: stump.with_app_tag(
             lxmf_app_data(h), self.app_tag, {"z": 1} if self.settings["packed_text"] else None)
         self.local = self.router.register_delivery_identity(self.identity, display_name=s["display_name"])
+        self._stamp_in_background()
         self.router.register_delivery_callback(self._on_message)
         for b in self.store.blocked():
             self.blocked.add(b["hash"])
@@ -149,7 +155,6 @@ class Core:
             for dm in self.store.pending_dms(dm_node["key"]):
                 self.store.update_dm(dm["id"], state="failed", reason="app closed before confirmation")
 
-        self.fast_stamps = _install_fast_stamper()
         self.running = True
         self._attach_optional_interfaces()
         for node in self.store.stump_nodes():
@@ -300,6 +305,46 @@ class Core:
         return self.local.hash.hex()
 
     # ================================================================ announces
+    def _stamp_in_background(self):
+        """Reticulum 1.6.1 puts a proof-of-work stamp on every announce, and holds an announce
+        (and the answer to a path request) until its stamp is made: once per address, then
+        kept, but minutes on a phone the first time (Nov 18). Meanwhile FireFly couldn't be
+        found or answered. So: no stamp kept yet -> announce at once without one, as before
+        (no node asks for stamps unless set to), and make it in the background at low priority;
+        once made (and kept by Reticulum), announce again, stamped, from then on.
+        stamp_state: None (Reticulum before 1.6), "working", "ready" or "failed"."""
+        self.stamp_state = None
+        T = RNS.Transport
+        if not hasattr(T, "STAMP_DESTINATIONS") or not hasattr(self.local, "_await_stamp"):
+            return
+        if not T.STAMP_DESTINATIONS or getattr(self.local, "stamp", None) is not None:
+            self.stamp_state = "ready" if getattr(self.local, "stamp", None) is not None else None
+            return
+        T.STAMP_DESTINATIONS = False            # announce now, unstamped, while it's made
+        self.stamp_state = "working"
+
+        def work():
+            try:                                # low priority: the app stays responsive
+                os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), 10)
+            except Exception:
+                pass
+            started, ok = time.time(), False
+            try:
+                ok = self.local._await_stamp()
+            except Exception as e:
+                RNS.log(f"Making the announce stamp failed: {e}", RNS.LOG_WARNING)
+            if ok and getattr(self.local, "stamp", None) is not None:
+                T.STAMP_DESTINATIONS = True
+                self.stamp_state = "ready"
+                RNS.log(f"Announce stamp made in {time.time() - started:.0f} s (kept): announcing stamped",
+                        RNS.LOG_NOTICE)
+                if self.running:
+                    self.announce()
+            else:
+                self.stamp_state = "failed"     # announces stay unstamped, as before 1.6.1
+
+        threading.Thread(target=work, daemon=True, name="firefly-stamp").start()
+
     def announce(self):
         self.local.display_name = self.settings["display_name"]
         self.router.announce(self.local.hash)
@@ -1410,15 +1455,56 @@ def fast_stamp_job(stamp_cost, workblock, message_id):
     return stamp, rounds
 
 
+def fast_rns_stamp_job(stamp_cost, workblock, message_id, size, mode=0):
+    """Reticulum 1.6's stamp search (RNS.Stamps.job_android's contract), single process.
+
+    From LXMF 1.3 every stamp is made by RNS.Stamps: message stamps (LXMF's 32 bytes, a 750 KB
+    work block) and announce stamps (14 bytes). Its Android path forks worker processes with
+    Python multiprocessing, which Chaquopy's Python doesn't have (and forking an app's process
+    isn't safe); a stamp that can't be made cancels the announce. Same rules as Reticulum's
+    job_simple (the fixed-point cost's target, `size`-byte candidates, cancelled through
+    RNS.Stamps.active_jobs), with the work block's SHA-256 state computed once and each
+    candidate hashed on a copy of it. Key stamps (MODE_KEYSTAMP) go to Reticulum's job_simple.
+    -> (stamp or None, rounds)."""
+    from RNS import Stamps
+    if mode != getattr(Stamps, "MODE_STAMP", 0):
+        return Stamps.job_simple(stamp_cost, workblock, message_id, size, mode)
+    target = Stamps.target_from_fp(stamp_cost)
+    base = hashlib.sha256(workblock or b"")
+    Stamps.active_jobs[message_id] = False
+    rounds, stamp = 0, None
+    try:
+        while stamp is None and not Stamps.active_jobs.get(message_id):
+            pool = os.urandom(size * 2048)          # 2048 candidates per cancellation check
+            for i in range(0, len(pool), size):
+                candidate = pool[i:i + size]
+                h = base.copy()
+                h.update(candidate)
+                rounds += 1
+                if int.from_bytes(h.digest(), "big") <= target:
+                    stamp = candidate
+                    break
+    finally:
+        if Stamps.active_jobs.pop(message_id, False):
+            stamp = None
+    return stamp, rounds
+
+
 def _install_fast_stamper():
-    """Use fast_stamp_job for LXMF's Android stamp path. LXMF's own Android path
-    needs Python multiprocessing, which Chaquopy's Python doesn't have; this is
-    faster than that path would be anyway. Returns True when installed."""
+    """On Android, make stamps without multiprocessing (Chaquopy's Python has none): from
+    Reticulum 1.6 / LXMF 1.3 in RNS.Stamps (message and announce stamps), before that in
+    LXMF's own stamper. Faster than their paths would be anyway. Returns True when installed."""
     import RNS.vendor.platformutils as pu
-    from LXMF import LXStamper
     if not pu.is_android():
         return False
-    LXStamper.job_android = fast_stamp_job
+    try:
+        import RNS.Stamps as rns_stamps
+        rns_stamps.job_android = fast_rns_stamp_job
+    except ImportError:
+        pass
+    from LXMF import LXStamper
+    if hasattr(LXStamper, "job_android"):           # LXMF before 1.3
+        LXStamper.job_android = fast_stamp_job
     return True
 
 

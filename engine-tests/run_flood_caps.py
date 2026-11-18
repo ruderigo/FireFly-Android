@@ -74,7 +74,11 @@ check("...one skipped is asked at its next announce, 5 s later", len(asked) == 2
 for i in range(5000):
     c._on_delivery_announce(bytes.fromhex(f"{i + 100000:032x}"), None, None, fresh=True)
 check("5000 more: what's heard in memory stays at 4000", len(c.announce_heard) == stump.HEARD_MAX, len(c.announce_heard))
-handler = next(h for h in RNS.Transport.announce_handlers if type(h).__name__ == "_DeliveryAnnounces")
+def _announce_handlers():
+    """Reticulum's registered announce handlers: a list up to 1.5.x, a table by aspect from 1.6."""
+    ah = RNS.Transport.announce_handlers
+    return [h for hs in ah.values() for h in hs] if isinstance(ah, dict) else list(ah)
+handler = next(h for h in _announce_handlers() if type(h).__name__ == "_DeliveryAnnounces")
 for i in range(5000):               # what an announce with a route leaves in its memory
     stump.fresh_announce(handler.seen, bytes.fromhex(f"{i + 200000:032x}"), os.urandom(10), False, 600)
 check("...and the announce handler's memory too", len(handler.seen) <= stump.HEARD_MAX, len(handler.seen))

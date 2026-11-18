@@ -18,9 +18,12 @@ jobs:
   engine:
     name: Engine tests
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     env:
       PYTHONUNBUFFERED: "1"
+      # Reticulum 1.6.1 stamps announces (cost 25, seconds to a minute each): a cheap stamp
+      # in the tests, as the Stump team's reference tests do. run_stamps checks real costs.
+      FIREFLY_STAMP_VALUE: "12"
     steps:
       - uses: actions/checkout@v5
 
@@ -37,7 +40,7 @@ jobs:
 
       # Same pins as the APK (chaquopy pip block in app/build.gradle.kts).
       - name: Install the engine's dependencies
-        run: pip install rns==1.5.5 lxmf==1.2.0 pyserial
+        run: pip install rns==1.6.1 lxmf==1.3.1 pyserial
 
       - name: Final message states can't be overwritten
         timeout-minutes: 2
@@ -63,7 +66,7 @@ jobs:
 
       - name: The greeting (/hello), and /auth + /nick on older Stumps
         timeout-minutes: 3
-        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py run_verify_gate.py run_scan_add.py run_address_link.py run_lxmf_codes.py run_app_tag.py run_find_popup.py run_share_codes.py run_prop_switch.py run_fresh_announce.py run_stump_dm_thread.py run_room_names.py run_lora_auth.py run_lora_here.py run_auto_wifi_bind.py run_binary_content.py run_flood_caps.py run_room_own_lines.py
+        run: bash engine-tests/ci_run.sh run_hello.py run_greeting.py run_auto_auth.py run_verify_gate.py run_scan_add.py run_address_link.py run_lxmf_codes.py run_app_tag.py run_find_popup.py run_share_codes.py run_prop_switch.py run_fresh_announce.py run_stump_dm_thread.py run_room_names.py run_lora_auth.py run_lora_here.py run_auto_wifi_bind.py run_binary_content.py run_flood_caps.py run_room_own_lines.py run_announce_stamp.py
 
       - name: Packed text (more of a chat line in each LoRa packet)
         timeout-minutes: 2

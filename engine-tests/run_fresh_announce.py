@@ -58,8 +58,12 @@ c.can_reach = lambda h: True                 # the radio can carry it (no radio 
 ident = RNS.Identity()
 dest = RNS.Destination.hash(ident, "lxmf", "delivery")
 LX = dest.hex()
-handler = next(h for h in RNS.Transport.announce_handlers if type(h).__name__ == "_DeliveryAnnounces")
-beacons = next(h for h in RNS.Transport.announce_handlers if isinstance(h, stump.BeaconHandler))
+def _announce_handlers():
+    """Reticulum's registered announce handlers: a list up to 1.5.x, a table by aspect from 1.6."""
+    ah = RNS.Transport.announce_handlers
+    return [h for hs in ah.values() for h in hs] if isinstance(ah, dict) else list(ah)
+handler = next(h for h in _announce_handlers() if type(h).__name__ == "_DeliveryAnnounces")
+beacons = next(h for h in _announce_handlers() if isinstance(h, stump.BeaconHandler))
 def arrive(h, dhash, b, path_response, app_data=None, idn=None):
     ph = os.urandom(32)
     RNS.Transport.path_table[dhash] = [time.time(), os.urandom(16), 2, time.time() + 86400, [b], None, ph]
