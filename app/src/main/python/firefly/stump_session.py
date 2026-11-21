@@ -854,11 +854,20 @@ class StumpSession:
         if room:
             self.names_asked, self.names_asked_at = room, time.time()
             self.names_quiet.discard(room)
+        # Our announce first (Nov 21): the Stump answers once it has our route, and after a
+        # while (a switch from its Wi-Fi, a quiet spell) it may not; announcing by hand fixed
+        # it. Not if we announced within the last minute: the air stays quiet.
+        if time.time() - getattr(self.core, "last_announce", 0) > self.ANNOUNCE_GAP_S:
+            try:
+                self.core.announce()
+            except Exception as e:
+                RNS.log(f"announce before the room check failed: {e}", RNS.LOG_DEBUG)
         self.pipe.send("/names")
 
     # Entering after a while (Nov 21): which room the Stump has us in is checked first, and
     # the room screen shows "checking" meanwhile instead of the room we last saw.
     WIFI_FRESH_S = 4            # a poll answer this recent: the room we show is the Stump's
+    ANNOUNCE_GAP_S = 60         # the LoRa room check announces first, unless we did this recently
     CHECK_WIFI_S = 6            # at most this long "checking" over Wi-Fi
     CHECK_LORA_S = 30           # ...over LoRa (the /names on entering)
 

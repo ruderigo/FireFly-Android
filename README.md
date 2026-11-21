@@ -22,6 +22,11 @@ alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox
   answered in the last 4 s), then shows its room. Never longer than 30 s over
   LoRa or 6 s over Wi-Fi; the message box stays. With a real Stump that had
   let FireFly go: "checking" for 5 s, then its room. Test: run_room_check.
+- **The LoRa room check announces first** (unless FireFly announced in the
+  last minute): the Stump answers once it has FireFly's route, and after a
+  switch from its Wi-Fi it may not have it (in #bavard on Wi-Fi, then over
+  LoRa, FireFly stayed on #bavard while #lora-mesh flashed; announcing by hand
+  fixed it).
 - Build 87, for Stump 1.0.0-beta.87 (Stump OS on a Raspberry Pi: its hotspot
   "Stump-XXXX" is recognised; its admin password is chosen at the first visit
   to /admin, which FireFly's Admin item opens). Nothing else to change.

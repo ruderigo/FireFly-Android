@@ -5,7 +5,8 @@
 Opening a Stump not heard from for a while showed the room FireFly last saw until the Stump's
 answer moved it (seconds over LoRa): the wrong room, for a moment. Now, entering after a while,
 the room view says "checking" until the Stump answers which room it has us in, then shows that
-room; never longer than 30 s over LoRa or 6 s over Wi-Fi.
+room; never longer than 30 s over LoRa or 6 s over Wi-Fi. Over LoRa FireFly announces first
+(unless it did in the last minute), so the Stump has its route to answer.
 """
 import json, os, sys, tempfile, time
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,8 +35,15 @@ enter = lambda: json.loads(api.stump_verify(K, True))
 view = lambda: json.loads(api.stump_view(K))
 sess.room = "main"
 
+announces = []
+def _ann():
+    announces.append(time.time()); c.last_announce = time.time()
+c.announce = _ann
+c.last_announce = 0
+
 # ---- LoRa
 enter()
+check("...it announces first, so the Stump has our route to answer (Nov 21)", len(announces) == 1, announces)
 check("LoRa, entering after a while: the room is being checked (the /names on entering)",
       view().get("checking_room") is True and sent == ["/names"], (view().get("checking_room"), sent))
 sess._handle(stump.parse_line("#lora-mesh: carol"))
@@ -46,6 +54,7 @@ enter()
 check("entering again soon after: nothing to check, the room straight away", view().get("checking_room") is False)
 sess.pipe.sent_at = time.time() - 5 * 60
 enter()
+check("...checking again within a minute of announcing: no second announce", len(announces) == 1, announces)
 sess.here_at -= sess.CHECK_LORA_S + 1                    # no answer at all
 check("...no answer within 30 s: the room is shown anyway", view().get("checking_room") is False)
 
