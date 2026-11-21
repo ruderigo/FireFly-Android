@@ -158,6 +158,7 @@
     <string name="settings_saved_radio">Saved · the radio retunes in a moment</string>
     <string name="starting">starting Reticulum</string>
     <string name="stump_defaults_fill">Fill in the Stump defaults (915.0 MHz · 125 kHz · SF8 · 4/5 · 7 dBm)</string>
+    <string name="room_checking">Checking which room you\'re in…</string>
     <string name="admin_menu">Admin</string>
     <string name="admin_wifi_only">Admin (Wi-Fi only)</string>
     <string name="admin_menu_text">Its admin page, over its Wi-Fi.</string>

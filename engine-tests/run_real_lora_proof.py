@@ -148,6 +148,13 @@ if STUMP_REL >= 71:
     n = len(sent)
     json.loads(api.stump_verify(K, True))
     check("entering after the timeout: /names again", sent[n:n + 1] == ["/names"], sent[n:])
+    check("...the room shows 'checking' meanwhile, not the room last seen (Nov 21)",
+          json.loads(api.stump_view(K)).get("checking_room") is True)
+    t_check = time.time()
+    check("...until the Stump's answer, then the room it has FireFly in",
+          wait(lambda: json.loads(api.stump_view(K)).get("checking_room") is False and sess.here_room is None, 60),
+          json.loads(api.stump_view(K)).get("room"))
+    print(f"     checked in {time.time() - t_check:.1f} s; room shown: #{json.loads(api.stump_view(K)).get('room')}", flush=True)
     check("...and its answer arrived: FireFly in the room the Stump has it in, nothing else sent",
           wait(lambda: sess.here_room is None, 120) and "/join lora-mesh" not in sent[n:], (sess.room, sent[n:]))
 else:

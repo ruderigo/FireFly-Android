@@ -158,6 +158,7 @@
     <string name="settings_saved_radio">Guardado · la radio se ajusta en un momento</string>
     <string name="starting">iniciando Reticulum</string>
     <string name="stump_defaults_fill">Rellenar con los valores de los Troncos (915,0 MHz · 125 kHz · SF8 · 4/5 · 7 dBm)</string>
+    <string name="room_checking">Comprobando en qué sala estás…</string>
     <string name="admin_menu">Admin</string>
     <string name="admin_wifi_only">Admin (solo Wi-Fi)</string>
     <string name="admin_menu_text">Su página de admin, por su Wi-Fi.</string>

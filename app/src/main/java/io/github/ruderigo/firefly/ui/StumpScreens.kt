@@ -466,7 +466,17 @@ private fun ColumnScope.RoomPane(key: String, view: JSONObject, mesh: Boolean, p
     val lines = view.optJSONArray("lines")?.objects() ?: emptyList()
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.lastIndex) }
-    LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(8.dp)) {
+    // Entering after a while (Nov 21): which room the Stump has us in is checked first; a
+    // moment's spinner rather than the room we last saw (it ends with the answer, or soon).
+    if (view.optBoolean("checking_room")) {
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), color = Amber.Ember, strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.room_checking), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    } else LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, contentPadding = PaddingValues(8.dp)) {
         if (lines.isEmpty()) item { Empty(stringResource(if (mesh) R.string.room_empty_mesh else R.string.room_empty)) }
         items(lines, key = { it.optLong("id") }) { l ->
             // A line the node refused (⧗: too fast) wasn't sent: a tap sends it again.

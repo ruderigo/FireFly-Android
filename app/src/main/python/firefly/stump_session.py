@@ -481,6 +481,9 @@ class StumpSession:
         self.names_quiet = set()        # rooms whose next /names answer isn't shown
         self.local_users = []           # the last Wi-Fi poll's people (this Stump's only)
         self.here_room = None           # entering over LoRa: the room our /names should find us in
+        self.here_at = 0.0              # when that /names went
+        self.entered_at = 0.0           # entering over Wi-Fi after a while: when (the poll's answer settles the room)
+        self.polled_at = 0.0            # the last poll answer
         # Entering a Stump waits for this (the "verifying…" popup): FireFly proves who it is to
         # every Stump, over Wi-Fi (/hello or /auth) and LoRa (/auth), before the room opens.
         # "idle", "verifying", "ok", "not_needed" (a Stump without /auth), "failed" (+ detail).
@@ -577,7 +580,8 @@ class StumpSession:
         if self.join_target and now - self.join_at < min(JOIN_WINDOW_S, wait) and \
                 not stump.same_room(self.join_target, self.room or ""):
             joining = self.join_target
-        return {"joining": joining, "refreshing": bool(self.rooms_asked_at and now - self.rooms_asked_at < wait)}
+        return {"joining": joining, "refreshing": bool(self.rooms_asked_at and now - self.rooms_asked_at < wait),
+                "checking_room": self.checking_room()}
 
     def _note_join(self, line):
         parts = line.split()
@@ -816,6 +820,7 @@ class StumpSession:
         st = self.verify["state"]
         if again:
             self._here()                        # entering: over LoRa, tell the Stump we're here
+            self._wifi_check_room()
         if st in ("ok", "not_needed"):
             return dict(self.verify)
         if st == "verifying" and time.time() - self.verify["at"] < stump.AUTH_WINDOW_S + 40:
@@ -845,10 +850,36 @@ class StumpSession:
             return
         room = (self.room or "").lstrip("#")
         self.here_room = room or None
+        self.here_at = time.time()
         if room:
             self.names_asked, self.names_asked_at = room, time.time()
             self.names_quiet.discard(room)
         self.pipe.send("/names")
+
+    # Entering after a while (Nov 21): which room the Stump has us in is checked first, and
+    # the room screen shows "checking" meanwhile instead of the room we last saw.
+    WIFI_FRESH_S = 4            # a poll answer this recent: the room we show is the Stump's
+    CHECK_WIFI_S = 6            # at most this long "checking" over Wi-Fi
+    CHECK_LORA_S = 30           # ...over LoRa (the /names on entering)
+
+    def _wifi_check_room(self):
+        """Entering over Wi-Fi with no poll answer for a while (a first open, a back-off after
+        losing it): poll now rather than at the next turn, and show "checking" till it answers."""
+        if self.pipe.kind != WIFI or time.time() - self.polled_at < self.WIFI_FRESH_S:
+            return
+        self.entered_at = time.time()
+        wake = getattr(self.pipe, "wake", None)
+        if wake is not None:
+            wake.set()
+
+    def checking_room(self):
+        """Is the room we'd show still being checked with the Stump (entering after a while)?
+        Over LoRa: the entering /names not answered yet; over Wi-Fi: no poll answer since
+        entering. Never longer than CHECK_LORA_S / CHECK_WIFI_S."""
+        now = time.time()
+        if self.pipe.kind == WIFI:
+            return self.entered_at > self.polled_at and now - self.entered_at < self.CHECK_WIFI_S
+        return self.here_room is not None and now - self.here_at < self.CHECK_LORA_S
 
     def _already_verified(self):
         """Does this Stump already know it's us? Over Wi-Fi, its own word this session (the
@@ -1047,6 +1078,7 @@ class StumpSession:
     # ------------------------------------------------------------ incoming: wifi
     @_while_open
     def on_http_poll(self, data):
+        self.polled_at = time.time()
         self.set_online(True)
         if data.get("hello") == "required":
             # Nothing to read until we've said who we are (no messages, people or rooms in this

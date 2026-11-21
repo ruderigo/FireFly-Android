@@ -8,11 +8,23 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.4-beta.86** (sandbox, for Stump 1.0.0-beta.86; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.4-beta.87** (sandbox, for Stump 1.0.0-beta.87; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.4-beta.87: the right room on entering (Stump 1.0.0-beta.87)
+- **Entering a Stump after a while shows the room it has you in**, not the
+  one FireFly last saw: the room view says "Checking which room you're in…"
+  with a small spinner until the Stump answers (over LoRa the /names sent on
+  entering after 4 quiet minutes; over Wi-Fi a poll asked at once when none
+  answered in the last 4 s), then shows its room. Never longer than 30 s over
+  LoRa or 6 s over Wi-Fi; the message box stays. With a real Stump that had
+  let FireFly go: "checking" for 5 s, then its room. Test: run_room_check.
+- Build 87, for Stump 1.0.0-beta.87 (Stump OS on a Raspberry Pi: its hotspot
+  "Stump-XXXX" is recognised; its admin password is chosen at the first visit
+  to /admin, which FireFly's Admin item opens). Nothing else to change.
 
 ### 0.6.4-beta.86: a Stump's /admin inside FireFly (Nov 18)
 - **Admin**, in a Stump's ⋯ menu (next to "verified") and in the long-press
