@@ -369,6 +369,32 @@ class Store:
         return [_decode_node(r) for r in rows]
 
     # ---------------------------------------------------------------- stump room log
+    def repair_unknown_stump_times(self):
+        """Stump lines and DMs stored with a time before 2020 (an ESP32 Stump's 2000-epoch clock,
+        shown as 1996, until Stump beta.88; a board that doesn't know the time): put each back
+        just after the one stored before it, in the order they arrived. Nov 22; runs at each
+        start, does nothing once none are left. -> how many were put back."""
+        from .stump import STUMP_TS_KNOWN_SINCE
+        fixed = 0
+        with self.lock:
+            for table, by in (("stump_lines", "node, room"), ("stump_dms", "node, nick")):
+                bad = self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE ts < ?", (STUMP_TS_KNOWN_SINCE,)).fetchone()[0]
+                if not bad:
+                    continue
+                last = {}
+                for row in self.db.execute(f"SELECT id, ts, {by} FROM {table} ORDER BY id").fetchall():
+                    group = tuple(row[2:])
+                    before = last.get(group, 0.0)
+                    if row[1] < STUMP_TS_KNOWN_SINCE:
+                        new = before + 0.001 if before else row[1]
+                        if new >= STUMP_TS_KNOWN_SINCE:
+                            self._write(f"UPDATE {table} SET ts=? WHERE id=?", (new, row[0]))
+                            fixed += 1
+                            last[group] = new
+                    else:
+                        last[group] = max(before, row[1])
+        return fixed
+
     def add_line(self, node, room, kind, body, nick=None, mine=False, msg_id=None, remote_id=None, ts=None):
         cur = self._write(
             "INSERT INTO stump_lines(node, room, kind, nick, body, ts, mine, msg_id, remote_id)"

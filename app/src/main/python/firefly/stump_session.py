@@ -1148,13 +1148,13 @@ class StumpSession:
                 if p["kind"] == "rename" and p["old"].lstrip("~") == self.nick:
                     self.nick = p["new"].lstrip("~")
                     self._save(nick=self.nick)
-                self.store.add_line(self.key, self.room, "system", body, remote_id=m.get("id"), ts=m.get("ts"))
+                self.store.add_line(self.key, self.room, "system", body, remote_id=m.get("id"), ts=stump.stump_ts(m.get("ts")))
             elif kind == "dm":
-                self._incoming_dm(m.get("nick", "?"), body, ts=m.get("ts"))
+                self._incoming_dm(m.get("nick", "?"), body, ts=stump.stump_ts(m.get("ts")))
             else:
                 self.store.add_line(self.key, self.room, "action" if kind == "action" else "msg", body,
                                     nick=m.get("nick"), mine=(m.get("nick") == self.nick),
-                                    remote_id=m.get("id"), ts=m.get("ts"))
+                                    remote_id=m.get("id"), ts=stump.stump_ts(m.get("ts")))
         for d in data.get("dms") or []:
             if d.get("id") in self.seen_remote:
                 continue
@@ -1168,7 +1168,7 @@ class StumpSession:
                     frames = None
                 # Without the frames it still shows as a voice note, marked as not playable.
                 audio = (int(voice.get("mode", 4)), frames) if frames else (int(voice.get("mode", 4)), None)
-            self._incoming_dm(d.get("nick", "?"), d.get("body", ""), ts=d.get("ts"), audio=audio)
+            self._incoming_dm(d.get("nick", "?"), d.get("body", ""), ts=stump.stump_ts(d.get("ts")), audio=audio)
 
     @_while_open
     def on_http_replies(self, replies, room, sent=None, hello=None):

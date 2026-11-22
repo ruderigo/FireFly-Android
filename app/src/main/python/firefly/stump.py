@@ -76,6 +76,22 @@ def is_stump_itself(nick, name):
 
 
 # ---------------------------------------------------------------- fresh or replayed
+# A Stump's "ts" before this is "time unknown" (Stump 1.0.0-beta.88): a board that hasn't
+# learned the time from the network counts from 2000 (and before beta.88 an ESP32 Stump's ts
+# was MicroPython's 2000-epoch clock, read here as 1996). Such a line is filed by when it arrived.
+STUMP_TS_KNOWN_SINCE = 1577836800  # 2020-01-01 UTC
+
+
+def stump_ts(ts):
+    """A Stump's "ts" if it can be a real time, else None ("time unknown": the line is then
+    filed by when it arrived, as for no ts at all)."""
+    try:
+        t = float(ts)
+    except (TypeError, ValueError):
+        return None
+    return t if t >= STUMP_TS_KNOWN_SINCE else None
+
+
 REAL_CLOCK_SINCE = 1704067200      # 2024-01-01: an announce made later says its sender knows the time
 
 

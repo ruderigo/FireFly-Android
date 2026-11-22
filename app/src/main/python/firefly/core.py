@@ -75,6 +75,10 @@ class Core:
         self.log = log
         self.settings = Settings(self.paths.settings)
         self.store = Store(self.paths.database)
+        try:                                    # lines misdated by a Stump's clock (1996): their order back
+            self.store.repair_unknown_stump_times()
+        except Exception as e:
+            RNS.log(f"Putting Stump lines back in order failed: {e}", RNS.LOG_WARNING)
         self.lock = threading.RLock()
         self.outbound = {}          # message id -> LXMessage in flight
         self.stumps = {}            # lxmf hash hex -> (name, version)

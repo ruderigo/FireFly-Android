@@ -8,11 +8,24 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.4-beta.87** (sandbox, for Stump 1.0.0-beta.87; the stable release is 0.5.1). Built and field-tested: BLE and USB
+Status: **0.6.4-beta.88** (sandbox, for Stump 1.0.0-beta.88; the stable release is 0.5.1). Built and field-tested: BLE and USB
 RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.4-beta.88: a Stump's time before 2020 is "time unknown" (Stump 1.0.0-beta.88)
+- **Messages misdated 1996 by an ESP32 Stump**: its room lines and DMs were
+  stamped with MicroPython's clock, which counts from 2000 (read as Unix time:
+  30 years early, and sorted before older lines). Stump beta.88 stamps them
+  in Unix time; a board that hasn't learned the time from the network still
+  reads early 2000. As the Stump team asked, a Stump's ts before 2020 is now
+  "time unknown": the line is filed by when it arrived. A real time is kept
+  (a DM the Stump held while you were away). Lines already stored with such a
+  time are put back in the order they arrived, once, at the next start.
+  (FireFly RK3326 files every Stump line by arrival since 0.9.2.)
+  Test: run_stump_ts.
+- Build 88, for Stump 1.0.0-beta.88 (also Meter 1.5). Nothing else to change.
 
 ### 0.6.4-beta.87: the right room on entering (Stump 1.0.0-beta.87)
 - **Entering a Stump after a while shows the room it has you in**, not the
