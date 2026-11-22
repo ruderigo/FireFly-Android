@@ -65,9 +65,9 @@ stump = addr("cedar-grove")
 key = "mesh:" + stump
 s.upsert_peer(stump, "lxmf", name="Cedar Grove", hops=1, stump="Cedar Grove", stump_ver="1.0.0-beta.88")
 s.upsert_stump_node(key, "mesh", stump, name="Cedar Grove", room="main", nick="robin",
-                    topic="Neighbourhood mesh. Be kind.", auth="ok", online=1, last_seen=ago(1),
+                    topic="Be kind 🌲", auth="ok", online=1, last_seen=ago(1),
                     lxmf=stump, release="1.0.0-beta.88",
-                    rooms=[{"name": "main", "count": 6, "topic": "Neighbourhood mesh. Be kind."},
+                    rooms=[{"name": "main", "count": 6, "topic": "Be kind 🌲"},
                            {"name": "lora-mesh", "count": 3, "topic": "LoRa (radio)"},
                            {"name": "garden", "count": 2, "topic": "Seeds, tools, harvest swaps"}],
                     users=["robin", "maya", "theo", "priya", "sol", "ines"])

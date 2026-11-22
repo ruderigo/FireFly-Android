@@ -94,15 +94,16 @@ shot("03-stumps")
 
 tap("Cedar Grove")
 # Over LoRa, entering after a while asks the Stump which room you're in; nobody answers
-# here, so the room shows once the check gives up (30 s).
-shot("04-room", settle=36)
+# here, so the check gives up after 30 s. The screen re-reads on the next change, or on
+# opening it again: back out and in.
+time.sleep(33)
+sh("input keyevent KEYCODE_BACK"); time.sleep(1.5)
+tap("Cedar Grove")
+shot("04-room", settle=4)
 
 start(f"--es open dm --es node {demo['stump_key']} --es nick priya")
 shot("05-stump-dm", settle=4)
 
-sh("input keyevent KEYCODE_BACK"); time.sleep(1); sh("input keyevent KEYCODE_BACK"); time.sleep(1.5)
-tap("Network", exact=True)
-shot("06-network")
 
 subprocess.run(f"adb logcat -d > {os.path.join(out, 'logcat.txt')}", shell=True)
 rnode.terminate()
