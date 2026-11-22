@@ -8,11 +8,36 @@ over the mesh *and* over the node's Wi-Fi, with one identity.
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
-Status: **0.6.4-beta.88** (sandbox, for Stump 1.0.0-beta.88; the stable release is 0.5.1). Built and field-tested: BLE and USB
-RNodes, LoRa messaging with the R36MAX handheld, Stump `/auth` over LoRa,
+Status: **0.6.4: no /auth over LoRa, packed text, Reticulum 1.6.1, a Stump's /admin** (for Stump 1.0.0-beta.88). Built and field-tested: BLE and USB
+RNodes, LoRa messaging with the R36MAX handheld, Stumps over LoRa,
 Opus voice notes everywhere, and delivery with the screen locked. Betas are
 made in [Sandbox_FireFly_Android](https://github.com/ruderigo/Sandbox_FireFly_Android),
 alongside the Stump beta ([SandBox_Stump_On](https://github.com/ruderigo/SandBox_Stump_On)).
+
+### 0.6.4: no /auth over LoRa, packed text, Reticulum 1.6.1, a Stump's /admin
+Everything since 0.5.1, in short (the betas below have the details):
+- **Add a Stump by its QR code**, or several at once from Find Stumps; the
+  QR code says it's a Stump and which release it runs, so FireFly can use it
+  before hearing it announce. The "+ 🪵" button; every LXMF app's QR code.
+- **No /auth over LoRa** with a Stump from beta.71: a signed message is the
+  proof, so a Stump opens at once. Entering after a while says "I'm here"
+  (`/names`) and shows **everyone in the room** at once.
+- **The right room on entering**: "Checking which room you're in…" with a
+  small spinner until the Stump answers, then its room; switching between
+  its Wi-Fi and LoRa keeps you where the Stump has you.
+- **Your lines stay in their room** (they used to follow you for 60 s after
+  a room change). A Stump's DM replies land in its thread.
+- **Packed text**: more of a chat line fits in each LoRa packet, with Stumps
+  and other FireFlys that read it (same format as the Stump's `ztext`).
+- **Reticulum 1.6.1 and LXMF 1.3.1**: FireFly announces at once while the
+  new announce stamp is made in the background.
+- **A Stump's /admin inside FireFly** (room ⋯ menu, or long-press the
+  Stump), always over the Stump's Wi-Fi, whatever else the phone uses.
+- **The Local network link answers on the Wi-Fi**, even with mobile data on.
+- **Times from a Stump that doesn't know the time** (an ESP32 that read 1996)
+  are filed by arrival.
+- French and Spanish name the Stump their own way; caps against flooding.
+- Build 88, for Stump 1.0.0-beta.88.
 
 ### 0.6.4-beta.88: a Stump's time before 2020 is "time unknown" (Stump 1.0.0-beta.88)
 - **Messages misdated 1996 by an ESP32 Stump**: its room lines and DMs were
