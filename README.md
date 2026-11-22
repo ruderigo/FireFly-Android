@@ -5,6 +5,13 @@ It speaks standard **LXMF** (so it talks to Sideband, NomadNet, MeshChat and
 FireFly handhelds) and understands **Stump nodes**: rooms, DMs, `/auth`,
 over the mesh *and* over the node's Wi-Fi, with one identity.
 
+<p align="center">
+  <img src="docs/screenshots/chats.png" alt="Conversations" width="200" />
+  <img src="docs/screenshots/chat.png" alt="A chat over LoRa, with signal and a voice note" width="200" />
+  <img src="docs/screenshots/stump-room.png" alt="A Stump's room" width="200" />
+  <img src="docs/screenshots/stump-dm.png" alt="A private message through a Stump" width="200" />
+</p>
+
 The radio is an RNode on **Bluetooth LE or USB**, found and attached at
 runtime. Both run through Reticulum's own RNode driver.
 
