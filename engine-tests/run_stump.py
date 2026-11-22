@@ -61,6 +61,9 @@ wait(lambda: core.is_stump(node_hex), 30, "recognised the Stump from its stump.n
 key = f"mesh:{node_hex}"
 wait(lambda: any(n["key"] == key for n in json.loads(api.stump_nodes())), 5, "listed under Stump nodes")
 check(not any(c["peer"] == node_hex for c in json.loads(api.conversations())), "not mixed into plain chats")
+# The node names us from our announce (display name): heard before our first line, or it
+# answers to "guest" (a race on a busy CI runner, Nov 22).
+core.announce(); time.sleep(3)
 api.stump_post(key, "bonjour la salle")
 v = lambda: json.loads(api.stump_view(key))
 wait(lambda: any(l["mine"] and l["state"] == "delivered" for l in v()["lines"]), 30,
