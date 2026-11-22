@@ -2,11 +2,14 @@ name: Screenshots
 
 # The README's screenshots: the debug APK in an Android emulator, seeded with a demo
 # (tools/screenshots/seed.py: made-up friends and a neighbourhood Stump), a few screens
-# saved as PNGs. Run by hand (Actions > Screenshots > Run workflow); the PNGs are the
-# run's "screenshots" artifact.
+# saved as PNGs. Run by hand (Actions > Screenshots > Run workflow); the PNGs (and each
+# screen's view tree) land on the "screenshots" branch, and in the run's artifact.
 
 on:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   screenshots:
@@ -52,3 +55,14 @@ jobs:
         with:
           name: screenshots
           path: shots/
+
+      - name: Put them on the screenshots branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898729+github-actions[bot]@users.noreply.github.com"
+          rm -rf shots/_seed
+          git checkout --orphan screenshots
+          git rm -rq --cached .
+          git add -f shots
+          git commit -qm "Screenshots from ${GITHUB_SHA::7}"
+          git push -f origin screenshots
