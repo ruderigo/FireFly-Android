@@ -71,13 +71,6 @@ def start(*extras):
     sh(f"am start -W -n {PKG}/.ui.MainActivity " + " ".join(extras))
 
 
-# A clean status bar: 9:41, full Wi-Fi and battery, no notifications.
-sh("settings put global sysui_demo_allowed 1")
-for c in ("enter", "clock -e hhmm 0941", "battery -e level 100 -e plugged false",
-          "network -e wifi show -e level 4 -e mobile hide", "notifications -e visible false"):
-    cmd, *rest = c.split(" ", 1)
-    sh(f"am broadcast -a com.android.systemui.demo -e command {cmd} {rest[0] if rest else ''}")
-
 # Install with every permission granted (no dialogs), seed before the first start.
 adb("install", "-r", "-g", apk)
 demo = json.loads(subprocess.check_output([sys.executable, os.path.join(HERE, "seed.py"),
@@ -87,8 +80,9 @@ for f in ("firefly.db", "settings.json"):
 sh(f"run-as {PKG} sh -c 'mkdir -p files/firefly && cp /data/local/tmp/firefly.db /data/local/tmp/settings.json files/firefly/'")
 print(sh(f"run-as {PKG} ls -la files/firefly"))
 
+rnode = subprocess.Popen([sys.executable, os.path.join(HERE, "tcp_rnode.py")])
 start()
-time.sleep(20)                       # Python and Reticulum start
+time.sleep(25)                       # Python, Reticulum and the radio start
 shot("01-chats")
 
 start(f"--es open chat --es peer {demo['sam']}")
@@ -99,7 +93,9 @@ tap("Stumps", exact=True)
 shot("03-stumps")
 
 tap("Cedar Grove")
-shot("04-room", settle=8)
+# Over LoRa, entering after a while asks the Stump which room you're in; nobody answers
+# here, so the room shows once the check gives up (30 s).
+shot("04-room", settle=36)
 
 start(f"--es open dm --es node {demo['stump_key']} --es nick priya")
 shot("05-stump-dm", settle=4)
@@ -109,3 +105,4 @@ tap("Network", exact=True)
 shot("06-network")
 
 subprocess.run(f"adb logcat -d > {os.path.join(out, 'logcat.txt')}", shell=True)
+rnode.terminate()

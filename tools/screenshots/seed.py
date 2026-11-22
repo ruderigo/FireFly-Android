@@ -25,7 +25,8 @@ addr = lambda name: hashlib.sha256(b"firefly-demo:" + name.encode()).hexdigest()
 voice = open(os.path.join(ROOT, "engine-tests", "kristoff_opus.ogg"), "rb").read()
 
 with open(os.path.join(out, "settings.json"), "w") as f:
-    json.dump({"display_name": "Robin", "settings_version": 4}, f)
+    json.dump({"display_name": "Robin", "settings_version": 4,
+               "rnode_hosts": ["10.0.2.2"]}, f)       # the stand-in RNode (tcp_rnode.py)
 
 # ---------------------------------------------------------------- friends (plain LXMF)
 sam, juniper, ocean, theo = addr("sam"), addr("juniper"), addr("ocean"), addr("theo")
